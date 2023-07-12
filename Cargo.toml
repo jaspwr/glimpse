@@ -1,0 +1,20 @@
+[package]
+name = "prober"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait = "0.1.71"
+execute = "0.2.12"
+futures = "0.3.28"
+gdk = "0.17.1"
+gtk = "0.17.1"
+home = "0.5.5"
+http = "0.2.9"
+reqwest = "0.11.18"
+serde = { version = "1.0.171", features = ["derive"] }
+serde_toml = "0.0.1"
+tokio = { version = "1.29.1", features = ["full"] }
+toml = "0.7.6"
