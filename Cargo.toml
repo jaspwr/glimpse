@@ -13,8 +13,10 @@ gdk = "0.17.1"
 gtk = "0.17.1"
 home = "0.5.5"
 http = "0.2.9"
+pango = "0.17.10"
 reqwest = "0.11.18"
 serde = { version = "1.0.171", features = ["derive"] }
+serde_json = "1.0.102"
 serde_toml = "0.0.1"
 tokio = { version = "1.29.1", features = ["full"] }
 toml = "0.7.6"
