@@ -8,6 +8,7 @@ pub struct Config {
     pub modules: Modules,
     pub use_web_modules: bool,
     pub visual: Visual,
+    pub misc: Misc
 }
 
 #[derive(Serialize, Deserialize)]
@@ -18,6 +19,13 @@ pub struct Modules {
     pub pdf_contents: bool,
     pub steam_games: bool,
     pub web_modules: WebModules,
+}
+
+
+#[derive(Serialize, Deserialize)]
+pub struct Misc {
+    pub display_command_paths: bool,
+    pub preferred_terminal: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -93,6 +101,10 @@ impl Default for Config {
                 icon_size: 32,
                 result_borders: true,
             },
+            misc: Misc {
+                display_command_paths: false,
+                preferred_terminal: String::from("xterm"),
+            }
         }
     }
 }

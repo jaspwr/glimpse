@@ -44,15 +44,22 @@ fn main() {
         .build();
 
     application.connect_activate(|app| {
+        let width = 350;
+        let height = 300;
+
         let window = gtk::ApplicationWindow::builder()
             .application(app)
             .title("Prober")
-            .default_width(350)
-            .default_height(70)
+            .default_width(width)
+            .default_height(height)
             .resizable(false)
             .decorated(false)
             // .type_hint(gdk::WindowTypeHint::PopupMenu)
             .build();
+
+        window.set_keep_above(true);
+
+        window.set_position(gtk::WindowPosition::Center);
 
         let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
 
@@ -383,7 +390,8 @@ pub async fn append_results(results: Vec<SearchResult>, list: Arc<std::sync::Mut
             entry.show_all();
         }
 
-        if list.list.selected_row().is_none() {
+        if list.list.selected_row().is_none()
+            || FAKE_FIRST_SELECTED.lock().unwrap().clone() {
             if let Some(first_row) = list.list.row_at_index(0) {
                 list.list.select_row(Some(&first_row));
             }

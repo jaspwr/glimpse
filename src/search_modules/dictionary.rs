@@ -105,6 +105,7 @@ fn create_result(response: String, relevance: f32) -> Option<SearchResult> {
         word_attributes.insert(word_size_attrib);
 
         def_container.set_margin(10);
+        def_container.set_margin_top(4);
 
         word.set_halign(gtk::Align::Start);
         word.set_attributes(Some(&word_attributes));
@@ -128,7 +129,7 @@ fn create_result(response: String, relevance: f32) -> Option<SearchResult> {
         dict_icon.set_halign(gtk::Align::Start);
         dict_icon.set_valign(gtk::Align::Start);
         dict_icon.set_margin(10);
-        dict_icon.set_margin_top(30);
+        dict_icon.set_margin_top(15);
 
         let grid = gtk::Grid::new();
         grid.attach(&dict_icon, 0, 0, 1, 1);

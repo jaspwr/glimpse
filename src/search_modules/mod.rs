@@ -24,6 +24,7 @@ pub trait SearchModule {
 
 mod commands;
 mod dictionary;
+mod steam_games;
 
 pub fn load_standard_modules() -> Vec<BoxedSearchModule> {
     let mut ret = Vec::<BoxedSearchModule>::new();
@@ -34,6 +35,10 @@ pub fn load_standard_modules() -> Vec<BoxedSearchModule> {
 
     if CONF.modules.web_modules.dictionary {
         ret.push(Box::new(dictionary::Dictionary::new()));
+    }
+
+    if CONF.modules.steam_games {
+        ret.push(Box::new(steam_games::SteamGames::new()));
     }
 
     ret
