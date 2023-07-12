@@ -8,6 +8,7 @@ pub struct SearchResult {
     pub render: Box<dyn Fn() -> gtk::Box>,
     pub relevance: f32,
     pub on_select: Option<Box<dyn Fn() + Sync + Send>>,
+    pub id: u64
 }
 
 unsafe impl Send for SearchResult {}

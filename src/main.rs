@@ -1,15 +1,27 @@
-use std::{sync::{Arc, Mutex}, ops::ControlFlow, mem};
+use std::{
+    mem,
+    ops::ControlFlow,
+    sync::{
+        atomic::{AtomicBool, AtomicU32, Ordering},
+        Arc, Mutex,
+    },
+    time::{self, Duration},
+};
 
 use config::Config;
 use futures::{future::abortable, stream::AbortHandle, Future};
+use gdk::glib::idle_add_once;
 use gdk::glib::once_cell::sync::Lazy;
 use gtk::prelude::*;
-use gdk::glib::idle_add_once;
 
 mod config;
+mod indexing;
 mod result_templates;
 mod search;
 mod search_modules;
+mod utils;
+
+static CONTROL: AtomicBool = AtomicBool::new(false);
 
 use search_modules::{SearchModule, SearchResult};
 
@@ -62,6 +74,15 @@ fn main() {
 
         search_field.connect_changed(move |entry| {
             {
+                let current_task_handle = current_task_handle.clone();
+                let mut current_task_handle = current_task_handle.lock().unwrap();
+                for handle in current_task_handle.iter() {
+                    handle.abort();
+                }
+                (*current_task_handle).clear()
+            }
+
+            {
                 let list = list_cpy.lock().unwrap();
                 let children = list.list.children();
                 for child in children {
@@ -69,13 +90,6 @@ fn main() {
 
                     list.list.remove(&child);
                 }
-
-                let current_task_handle = current_task_handle.clone();
-                let mut current_task_handle = current_task_handle.lock().unwrap();
-                for handle in current_task_handle.iter() {
-                    handle.abort();
-                }
-                (*current_task_handle).clear()
             }
 
             let list = list_cpy.clone();
@@ -88,9 +102,9 @@ fn main() {
                 .for_each(|f| {
                     let list = list.clone();
                     let (task, handle) = abortable(async move {
-                            let results = f.await;
-                            append_results(results, list.clone()).await;
-                        });
+                        let results = f.await;
+                        append_results(results, list.clone()).await;
+                    });
                     current_task_handle.lock().unwrap().push(handle);
                     rt.lock().unwrap().spawn(task);
                 });
@@ -106,21 +120,29 @@ fn main() {
             return Inhibit(false);
         });
 
+        search_field.connect_key_release_event(|_, keyevent| {
+            let key = keyevent.keyval();
+            if key == gdk::keys::constants::Control_L || key == gdk::keys::constants::Control_R {
+                CONTROL.store(false, Ordering::Relaxed);
+            }
+            Inhibit(false)
+        });
 
         list.lock()
-            .unwrap().list
+            .unwrap()
+            .list
             .connect_row_activated(move |list_box, _| {
                 let row = list_box.selected_row().unwrap();
                 perform_entry_action(row);
             });
-
 
         let search_field = Arc::new(search_field);
 
         let search_field_cpy = search_field.clone();
 
         list.lock()
-            .unwrap().list
+            .unwrap()
+            .list
             .connect_key_press_event(move |list, key_event| -> Inhibit {
                 let key = key_event.keyval();
                 let search_field = search_field_cpy.clone();
@@ -128,6 +150,18 @@ fn main() {
                 handle_list_keypress(key, search_field, list);
 
                 return Inhibit(false);
+            });
+
+        list.lock()
+            .unwrap()
+            .list
+            .connect_key_release_event(|_, keyevent| {
+                let key = keyevent.keyval();
+                if key == gdk::keys::constants::Control_L || key == gdk::keys::constants::Control_R
+                {
+                    CONTROL.store(false, Ordering::Relaxed);
+                }
+                Inhibit(false)
             });
 
         window.set_child(Some(&container));
@@ -138,23 +172,43 @@ fn main() {
 }
 
 fn perform_entry_action(row: gtk::ListBoxRow) {
-    use_entry_data(&row, Box::new(|data| {
-        if let Some(action) = data.action.as_ref() {
-            action();
-            std::process::exit(0);
-        }
-    }));
+    use_entry_data(
+        &row,
+        Box::new(|data| {
+            if let Some(action) = data.action.as_ref() {
+                action();
+                std::process::exit(0);
+            }
+        }),
+    );
 }
 
-fn get_entry_relavance(row: gtk::ListBoxRow) -> f32 {
+fn get_entry_id(widget: &gtk::Widget) -> u64 {
     unsafe {
-        if let Some(data_ptr) = row.steal_data::<*mut ResultData>("dat") {
+        if let Some(data_ptr) = widget.steal_data::<*mut ResultData>("dat") {
+            let data = Box::from_raw(data_ptr);
+
+            let id = data.id;
+
+            let data_ptr = Box::into_raw(data);
+            widget.set_data("dat", data_ptr);
+
+            return id;
+        } else {
+            0
+        }
+    }
+}
+
+fn get_entry_relevance(widget: gtk::Widget) -> f32 {
+    unsafe {
+        if let Some(data_ptr) = widget.steal_data::<*mut ResultData>("dat") {
             let data = Box::from_raw(data_ptr);
 
             let relevance = data.relevance;
 
             let data_ptr = Box::into_raw(data);
-            row.set_data("dat", data_ptr);
+            widget.set_data("dat", data_ptr);
 
             return relevance;
         } else {
@@ -185,12 +239,17 @@ fn use_entry_data(widget: &gtk::ListBoxRow, action: Box<dyn Fn(&ResultData) -> (
 
 fn handle_search_field_keypress(key: gdk::keys::Key, list: Arc<Mutex<SafeListBox>>) {
     if FAKE_FIRST_SELECTED.lock().unwrap().clone()
-    && (key == gdk::keys::constants::Down || key == gdk::keys::constants::Up) {
+        && (key == gdk::keys::constants::Down || key == gdk::keys::constants::Up)
+    {
         (*FAKE_FIRST_SELECTED.lock().unwrap()) = false;
-        let moves = if key == gdk::keys::constants::Down { 1 } else { -1 };
+        let moves = if key == gdk::keys::constants::Down {
+            1
+        } else {
+            -1
+        };
         {
             let list = list.lock().unwrap();
-            if let Some(current_row) =  list.list.selected_row() {
+            if let Some(current_row) = list.list.selected_row() {
                 let selected_index = current_row.index();
                 if let Some(next_row) = list.list.row_at_index(selected_index + moves) {
                     list.list.select_row(Some(&next_row));
@@ -219,6 +278,10 @@ fn handle_search_field_keypress(key: gdk::keys::Key, list: Arc<Mutex<SafeListBox
 }
 
 fn handle_list_keypress(key: gdk::keys::Key, search_field: Arc<gtk::Entry>, list: &gtk::ListBox) {
+    if key == gdk::keys::constants::Control_L || key == gdk::keys::constants::Control_R {
+        CONTROL.store(true, Ordering::Relaxed);
+    }
+
     if key == gdk::keys::constants::Escape {
         std::process::exit(0);
     }
@@ -227,16 +290,50 @@ fn handle_list_keypress(key: gdk::keys::Key, search_field: Arc<gtk::Entry>, list
         return;
     }
 
+    if key == gdk::keys::constants::Left {
+        search_field.grab_focus();
+        let text = search_field.text().to_string();
+        let control = CONTROL.load(Ordering::Relaxed);
+
+        let mut pos = text.len() as i32 - 1;
+        if control {
+            while pos > 0 {
+                if text.chars().nth(pos as usize).unwrap() == ' ' {
+                    break;
+                }
+                pos -= 1;
+            }
+            if pos > 0 {
+                pos += 1;
+            }
+        }
+
+        search_field.set_position(pos);
+        return;
+    }
+
     let backspace = key == gdk::keys::constants::BackSpace;
 
     match key.to_unicode() {
         Some(key) => {
+            let control = CONTROL.load(Ordering::Relaxed);
             let text = search_field.text().to_string();
             if !backspace {
+                if (key == 'a' || key == 'A') && control {
+                    // HACK: The text is generally just selected
+                    //       by default. Returning means we don't
+                    //       call unselect all.
+                    search_field.grab_focus();
+                    return;
+                }
                 search_field.set_text((text + &key.to_string()).as_str());
             } else {
                 if text.len() > 0 {
-                    search_field.set_text(&text[0..text.len() - 1]);
+                    if control {
+                        search_field.set_text("");
+                    } else {
+                        search_field.set_text(&text[0..text.len() - 1]);
+                    }
                 }
             }
             list.unselect_all();
@@ -254,60 +351,72 @@ pub struct SafeListBox {
 unsafe impl Send for SafeListBox {}
 unsafe impl Sync for SafeListBox {}
 
-pub async fn append_results(
-    results: Vec<SearchResult>,
-    list: Arc<std::sync::Mutex<SafeListBox>>,
-) {
+pub async fn append_results(results: Vec<SearchResult>, list: Arc<std::sync::Mutex<SafeListBox>>) {
     let mut results = results;
     results.sort_by(|a, b| a.relevance.partial_cmp(&b.relevance).unwrap());
 
-    // {
-    //     let list = list.lock().unwrap();
-    //     let mut actions = actions.lock().unwrap();
-    //     actions.clear();
-
-    //     for result in &results {
-    //         actions.push(result.on_select);
-    //     }
-    // }
-
     idle_add_once(move || {
-        {
-            let list = list.lock().unwrap();
-            for result in results {
-                // TODO: Order by relevance
-                let index = 0;
-                let entry = (result.render)();
+        let list = list.lock().unwrap();
+        for result in results {
+            let index = match find_slot(result.relevance, result.id, &list) {
+                Some(index) => index,
+                None => continue,
+            };
 
-                list.list.insert(&entry, index);
-                let row = list.list.row_at_index(index).unwrap();
+            let entry = (result.render)();
 
-                let data = ResultData {
-                    relevance: result.relevance,
-                    action: result.on_select,
-                };
+            list.list.insert(&entry, index);
+            let row = list.list.row_at_index(index).unwrap();
 
-                unsafe {
-                    let data = Box::new(data);
-                    let data_ptr = Box::into_raw(data);
-                    row.set_data("dat", data_ptr);
-                }
+            let data = ResultData {
+                relevance: result.relevance,
+                id: result.id,
+                action: result.on_select,
+            };
 
-                entry.show_all();
+            unsafe {
+                let data = Box::new(data);
+                let data_ptr = Box::into_raw(data);
+                row.set_data("dat", data_ptr);
             }
 
-            if list.list.selected_row().is_none() {
-                if let Some(first_row) = list.list.row_at_index(0) {
-                    list.list.select_row(Some(&first_row));
-                }
-                (*FAKE_FIRST_SELECTED.lock().unwrap()) = true;
+            entry.show_all();
+        }
+
+        if list.list.selected_row().is_none() {
+            if let Some(first_row) = list.list.row_at_index(0) {
+                list.list.select_row(Some(&first_row));
             }
+            (*FAKE_FIRST_SELECTED.lock().unwrap()) = true;
         }
     });
 }
 
+fn find_slot(relevance: f32, id: u64, list: &SafeListBox) -> Option<i32> {
+    let children = list.list.children();
+
+    for child in &children {
+        let entry_id = get_entry_id(child);
+        if entry_id == id {
+            return None;
+        }
+    }
+
+    let len = children.len();
+
+    let mut index = 0;
+    for child in children {
+        let child_relevance = get_entry_relevance(child);
+        if child_relevance < relevance {
+            return Some(index);
+        }
+        index += 1;
+    }
+    Some(len as i32)
+}
 
 struct ResultData {
     relevance: f32,
+    id: u64,
     action: Option<Box<dyn Fn() -> () + Sync + Send>>,
 }

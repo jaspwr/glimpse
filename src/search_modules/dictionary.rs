@@ -7,7 +7,7 @@ use gdk::pango::ffi::PangoAttrClass;
 use gtk::traits::{ContainerExt, GridExt, WidgetExt, LabelExt};
 use http::Request;
 
-use crate::{result_templates::standard_entry, search::string_search};
+use crate::{result_templates::standard_entry, search::string_search, utils};
 
 use super::{SearchModule, SearchResult};
 
@@ -21,9 +21,12 @@ impl Dictionary {
 
 #[async_trait]
 impl SearchModule for Dictionary {
-    async fn search(&self, query: String, max_results: u32) -> Vec<SearchResult> {
+    async fn search(&self, query: String, _: u32) -> Vec<SearchResult> {
+        // wait 0.5 seconds to allow the user to type more
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
         let mut query = query;
-        let mut relevance: f32 = 0.1;
+        let mut relevance: f32 = 1.5;
 
         if query.len() == 0 {
             return vec![];
@@ -75,6 +78,8 @@ fn create_result(response: String, relevance: f32) -> Option<SearchResult> {
         Some(definition) => definition.to_string(),
         None => return None
     };
+
+    let id = utils::simple_hash(&word) + 0xa0a0a0a0;
 
     let render = move || {
         let word = gtk::Label::new(Some(&word));
@@ -137,6 +142,7 @@ fn create_result(response: String, relevance: f32) -> Option<SearchResult> {
     Some(SearchResult {
         render: Box::new(render),
         relevance,
+        id,
         on_select: None,
     })
 }

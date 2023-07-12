@@ -50,7 +50,13 @@ pub fn load_config() -> Result<Config, ()> {
             let file = file.lines().collect::<Result<Vec<String>, _>>().unwrap().join("\n");
             return Ok(toml::from_str(&file).unwrap());
         } else {
-            let default_config = Config::default();
+            let mut default_config = Config::default();
+
+            default_config.indexing.location = home
+                .join(".cache")
+                .join("prober")
+                .to_str().unwrap().to_string();
+
             let toml = toml::to_string(&default_config).unwrap();
             let config_folder = home.join(".config").join("prober");
             std::fs::create_dir_all(config_folder).unwrap();
@@ -65,7 +71,7 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             indexing: Indexing {
-                location: String::from("/home"),
+                location: String::from(""),
                 size_upper_bound_GiB: 0.5,
             },
             modules: Modules {
