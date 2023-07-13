@@ -44,22 +44,12 @@ impl Commands {
 
             // TODO: Store pixbuf somewhere
             if icon.is_none() {
-                let theme = gtk::IconTheme::default().unwrap();
-                let mut icon_str = "application-x-executable";
-                if is_cli_app(&name) {
-                    icon_str = "utilities-terminal";
-                }
-                let icon_info = theme.lookup_icon(icon_str, 32, gtk::IconLookupFlags::FORCE_SIZE);
-                if let Some(icon_info) = icon_info {
-                    let pixbuf = gtk::gdk::gdk_pixbuf::Pixbuf::from_file_at_size(
-                        icon_info.filename().unwrap().to_str().unwrap(),
-                        CONF.visual.icon_size as i32,
-                        CONF.visual.icon_size as i32,
-                    );
-                    if let Ok(pixbuf) = pixbuf {
-                        icon = Some(gtk::Image::from_pixbuf(Some(&pixbuf)));
-                    }
-                }
+                let icon_str = if is_cli_app(&name) {
+                    "utilities-terminal"
+                } else {
+                    "application-x-executable"
+                };
+                icon = icon::from_gtk(icon_str);
             }
 
             if !CONF.visual.show_icons {

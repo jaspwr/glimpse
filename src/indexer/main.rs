@@ -191,20 +191,20 @@ fn term_frequency(tokens: Vec<String>) -> TokenFrequency {
         *count += 1.0;
     }
 
-    let t_prime = t
-        .iter()
-        .map(|(_, f)| f.clone())
-        .reduce(|mut max: f32, f| {
-            if f > max {
-                max = f;
-            }
-            max
-        })
-        .unwrap_or(0.0);
-
-    for (_, count) in t.iter_mut() {
-        *count /= t_prime;
-    }
+    // let t_prime = t
+    //     .iter()
+    //     .map(|(_, f)| f.clone())
+    //     .reduce(|mut max: f32, f| {
+    //         if f > max {
+    //             max = f;
+    //         }
+    //         max
+    //     })
+    //     .unwrap_or(0.0);
+    //
+    // for (_, count) in t.iter_mut() {
+    //     *count /= t_prime;
+    // }
 
     t
 }

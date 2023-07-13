@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use execute::Execute;
 use prober::indexing::Index;
 
-use crate::{result_templates::standard_entry, search::string_search, utils::simple_hash};
+use crate::{result_templates::standard_entry, search::string_search, utils::simple_hash, icon};
 
 use super::{SearchModule, SearchResult};
 
@@ -49,10 +49,15 @@ impl SearchModule for Files {
                 .get(&query)
                 .unwrap_or(&vec![])
                 .into_iter()
-                .map(|(s, r)| {
+                .map(|(s, relevance)| {
                     let s = s.to_str().unwrap().to_string();
-                    let r = *r;
-                    self.create_result(s, r, FileType::File)
+
+                    let mut relevance = *relevance;
+                    if relevance > 3.0 {
+                        relevance = 3.0;
+                    }
+
+                    self.create_result(s, relevance, FileType::File)
                 })
                 .collect::<Vec<SearchResult>>();
 
@@ -73,8 +78,21 @@ impl Files {
                 Some(name) => name,
                 None => name_cpy.clone(),
             };
+
+            let icon_name = match kind {
+                FileType::File => {
+                    let ext = name.split('.').last().unwrap_or("");
+                    find_file_icon_name(ext)
+                }
+                FileType::Dir => {
+                    find_folder_icon_name(&name)
+                }
+            };
+
+            let icon = icon::from_gtk(icon_name);
+
             let desc = Some(name_cpy.clone());
-            standard_entry(name, None, desc)
+            standard_entry(name, icon, desc)
         };
 
         let name_cpy = name.clone();
@@ -91,6 +109,46 @@ impl Files {
             id: id_hash(&name),
             on_select: Some(Box::new(on_select)),
         }
+    }
+}
+
+fn find_file_icon_name(ext: &str) -> &str {
+    match ext {
+        "png" | "jpg" | "jpeg" | "gif" | "svg" => "image-x-generic",
+        "mp3" | "wav" | "flac" | "ogg" => "audio-x-generic",
+        "mp4" | "mkv" | "avi" | "webm" => "video-x-generic",
+        "pdf" => "application-pdf",
+        "doc" | "docx" => "application-msword",
+        "xls" | "xlsx" => "application-vnd.ms-excel",
+        "ppt" | "pptx" => "application-vnd.ms-powerpoint",
+        "zip" | "tar" | "gz" | "xz" | "bz2" | "7z" => "package-x-generic",
+        "rs" => "text-x-rust",
+        "py" => "text-x-python",
+        "js" => "text-x-javascript",
+        "json" => "text-x-javascript",
+        "c" => "text-x-csrc",
+        "cpp" => "text-x-c++src",
+        "go" => "text-x-go",
+        "java" => "text-x-java",
+        "hs" => "text-x-haskell",
+        "sh" => "text-x-script",
+        "html" | "htm" => "text-html",
+        "css" => "text-css",
+        "md" => "text-x-markdown",
+        "exe" => "application-x-executable",
+        "deb" | "rpm" => "package-x-generic",
+        _  => "text-x-generic",
+    }
+}
+
+fn find_folder_icon_name(name: &str) -> &str {
+    match name {
+        "Documents" => "folder-documents",
+        "Downloads" => "folder-downloads",
+        "Music" => "folder-music",
+        "Pictures" => "folder-pictures",
+        "Videos" => "folder-videos",
+        _ => "folder",
     }
 }
 

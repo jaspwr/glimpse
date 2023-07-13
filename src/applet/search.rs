@@ -27,11 +27,11 @@ pub fn string_search(
         similarity /= needle.len() as f32;
 
         if item == needle {
-            similarity += 1.0;
+            similarity += 4.0;
         } else if item.starts_with(&needle) {
-            similarity += 0.7;
+            similarity += 1.0;
         } else if item.contains(&needle) {
-            similarity += 0.6;
+            similarity += 0.8;
         }
 
         if let Some(bias) = BIASES.map.get(&id_hash(&item)) {

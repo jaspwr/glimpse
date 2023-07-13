@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use execute::Execute;
 use prober::config::CONF;
 
-use crate::{result_templates::standard_entry, search::string_search, utils::simple_hash};
+use crate::{result_templates::standard_entry, search::string_search, utils::simple_hash, icon};
 
 use super::{SearchModule, SearchResult};
 
@@ -135,17 +135,9 @@ fn find_icon(appid: u32) -> Option<gtk::Image> {
         .join("apps")
         .join(format!("steam_icon_{}.png", appid));
 
-    let file = std::fs::File::open(&path);
-    if file.is_ok() {
-        let pixbuf = gtk::gdk::gdk_pixbuf::Pixbuf::from_file(path).unwrap();
-        let pixbuf = pixbuf
-            .scale_simple(
-                CONF.visual.icon_size as i32,
-                CONF.visual.icon_size as i32,
-                gtk::gdk_pixbuf::InterpType::Bilinear,
-            )
-            .unwrap();
-        return Some(gtk::Image::from_pixbuf(Some(&pixbuf)));
+    let path = &path.to_str().unwrap().to_string();
+    match icon::from_file(path) {
+        Some(icon) => Some(icon),
+        None => icon::from_gtk("application-x-executable"),
     }
-    None
 }
