@@ -1,6 +1,15 @@
 use std::io::{BufRead, BufReader};
 
+use pango::glib::once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
+
+pub static CONF: Lazy<Config> = Lazy::new(|| match load_config() {
+    Ok(config) => config,
+    Err(_) => {
+        println!("Failed to load config");
+        Config::default()
+    }
+});
 
 #[derive(Serialize, Deserialize)]
 pub struct Config {

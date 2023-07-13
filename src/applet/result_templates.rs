@@ -1,4 +1,4 @@
-use gtk::traits::{GridExt, ContainerExt, WidgetExt};
+use gtk::traits::{GridExt, ContainerExt, WidgetExt, LabelExt};
 
 pub fn standard_entry(
     name: String,

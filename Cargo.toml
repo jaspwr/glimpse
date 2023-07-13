@@ -3,7 +3,13 @@ name = "prober"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[[bin]]
+name = "applet"
+path = "src/applet/main.rs"
+
+[[bin]]
+name = "indexer"
+path = "src/indexer/main.rs"
 
 [dependencies]
 async-trait = "0.1.71"
@@ -13,6 +19,7 @@ gdk = "0.17.1"
 gtk = "0.17.1"
 home = "0.5.5"
 http = "0.2.9"
+infer = "0.15.0"
 pango = "0.17.10"
 reqwest = "0.11.18"
 savefile = "0.13.0"

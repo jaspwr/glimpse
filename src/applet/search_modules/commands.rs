@@ -6,28 +6,32 @@ use std::{
 use async_trait::async_trait;
 use execute::Execute;
 use gtk::traits::IconThemeExt;
+use prober::config::CONF;
 
 use crate::{
+    biases::{Biases, BIASES},
     result_templates::standard_entry,
-    search::{string_search, Biases},
-    utils, CONF,
+    search::string_search,
+    utils, icon,
 };
 
 use super::{SearchModule, SearchResult};
 
 pub struct Commands {
     apps: Vec<String>,
-    biases: Biases,
 }
 
 unsafe impl Send for Commands {}
 unsafe impl Sync for Commands {}
 
+fn id_hash(name: &String) -> u64 {
+    utils::simple_hash(name) + 0xabcdef
+}
+
 impl Commands {
     pub fn new() -> Commands {
         Commands {
             apps: get_list().unwrap(),
-            biases: Biases::load("commands"),
         }
     }
 
@@ -70,25 +74,9 @@ impl Commands {
             standard_entry(name, icon, desc)
         };
 
-        let id = utils::simple_hash(&name) + 0xabcdef;
+        let id = id_hash(&name);
 
-        let biases_cpy = self.biases.clone();
         let run = move || {
-            let mut biases = biases_cpy.clone();
-            let mut bias = 0.0;
-            if let Some(b) = biases.map.get(&name) {
-                bias = b.clone();
-            }
-
-            bias += 0.15;
-
-            if bias > 0.6 {
-                bias = 0.6;
-            }
-
-            biases.map.insert(name.clone(), bias);
-            biases.save("commands");
-
             if is_cli_app(&name) {
                 spawn_in_terminal(&name.clone());
             } else {
@@ -108,7 +96,7 @@ impl Commands {
 #[async_trait]
 impl SearchModule for Commands {
     async fn search(&self, query: String, max_results: u32) -> Vec<SearchResult> {
-        string_search(&query, &self.apps, max_results, Some(&self.biases))
+        string_search(&query, &self.apps, max_results, Box::new(id_hash), true)
             .into_iter()
             .map(|(s, r)| self.create_result(s, r))
             .collect()
@@ -182,17 +170,10 @@ fn find_icon(name: &String) -> Option<gtk::Image> {
             let mut path = path.clone();
             path.push_str(extension);
 
-            let file = std::fs::File::open(path.clone());
-            if file.is_ok() {
-                let pixbuf = gtk::gdk::gdk_pixbuf::Pixbuf::from_file(path).unwrap();
-                let pixbuf = pixbuf
-                    .scale_simple(
-                        CONF.visual.icon_size as i32,
-                        CONF.visual.icon_size as i32,
-                        gtk::gdk_pixbuf::InterpType::Bilinear,
-                    )
-                    .unwrap();
-                return Some(gtk::Image::from_pixbuf(Some(&pixbuf)));
+
+            let i =  icon::from_file(&path);
+            if i.is_some() {
+                return i;
             }
         }
     }
@@ -276,6 +257,28 @@ fn is_cli_app(name: &String) -> bool {
         "neofetch" => true,
         "julia" => true,
         "nvim" => true,
+        "emacs" => true,
+        "htop" => true,
+        "top" => true,
+        "btop" => true,
+        "nmtui" => true,
+        "nmcli" => true,
+        "ip" => true,
+        "ipconfig" => true,
+        "ifconfig" => true,
+        "gdb" => true,
+        "ld" => true,
+        "alias" => true,
+        "kill" => true,
+        "pkill" => true,
+        "find" => true,
+        "tree" => true,
+        "sudo" => true,
+        "su" => true,
+        "chown" => true,
+        "chmod" => true,
+        "grep" => true,
+        "sed" => true,
         _ => false,
     }
 }

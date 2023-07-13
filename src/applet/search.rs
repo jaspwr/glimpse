@@ -1,36 +1,41 @@
-use savefile::prelude::*;
-use savefile_derive::Savefile;
-use std::collections::HashMap;
-
-use crate::indexing;
+use crate::{biases::{Biases, BIASES}};
 
 pub fn string_search(
     needle: &String,
     haystack: &Vec<String>,
     max_results: u32,
-    biases: Option<&Biases>,
+    id_hash: Box<dyn Fn(&String) -> u64>,
+    case_sensitive: bool,
 ) -> Vec<(String, f32)> {
     let mut results = Vec::<(String, f32)>::new();
 
+    let mut needle = needle.clone();
+    if !case_sensitive {
+        needle = needle.to_lowercase();
+    }
+
     let mut worst_sim: f32 = 0.0;
-    for item in haystack {
-        let matched = matched_chars_loose(needle, item);
+    for item_cased in haystack {
+        let mut item = item_cased.clone();
+        if !case_sensitive {
+            item = item.to_lowercase();
+        }
+
+        let matched = matched_chars_loose(&needle, &item);
 
         let mut similarity = matched as f32 + (matched as f32 / item.len() as f32);
         similarity /= needle.len() as f32;
 
         if item == needle {
             similarity += 1.0;
-        } else if item.starts_with(needle) {
-            similarity += 0.5;
-        } else if item.contains(needle) {
-            similarity += 0.25;
+        } else if item.starts_with(&needle) {
+            similarity += 0.7;
+        } else if item.contains(&needle) {
+            similarity += 0.6;
         }
 
-        if let Some(biases) = biases {
-            if let Some(bias) = biases.map.get(item) {
-                similarity += bias;
-            }
+        if let Some(bias) = BIASES.map.get(&id_hash(&item)) {
+            similarity += bias;
         }
 
         if results.len() < max_results as usize || similarity > worst_sim {
@@ -42,7 +47,7 @@ pub fn string_search(
             }
             worst_sim = similarity;
 
-            results.push((item.clone(), similarity));
+            results.push((item_cased.clone(), similarity));
             results.sort_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap());
             if results.len() > max_results as usize {
                 results.pop();
@@ -74,35 +79,4 @@ fn matched_chars_loose(checking: &String, against: &String) -> u32 {
         }
     }
     ret
-}
-
-#[derive(Savefile, Clone)]
-pub struct Biases {
-    pub map: HashMap<String, f32>,
-}
-
-impl Biases {
-    fn new() -> Biases {
-        Biases {
-            map: HashMap::new(),
-        }
-    }
-
-    pub fn load(name: &str) -> Biases {
-        match std::fs::File::open(indexing::PATH.join(name).with_extension("bin")) {
-            Ok(mut file) => {
-                match savefile::load(&mut file, 0) {
-                    Ok(biases) => biases,
-                    Err(_) => Biases::new(),
-                }
-            },
-            Err(_) => Biases::new()
-        }
-    }
-
-    pub fn save(&self, name: &str) {
-        let path = indexing::PATH.join(name).with_extension("bin");
-        let mut file = std::fs::File::create(path).unwrap();
-        savefile::save(&mut file, 0, self).unwrap();
-    }
 }

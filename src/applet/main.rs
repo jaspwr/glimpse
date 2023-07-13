@@ -8,30 +8,22 @@ use std::{
     time::{self, Duration},
 };
 
-use config::Config;
+use biases::increment_bias;
 use futures::{future::abortable, stream::AbortHandle, Future};
-use gdk::glib::idle_add_once;
+use gdk::{glib::idle_add_once, ffi::GdkRectangle, Rectangle};
 use gdk::glib::once_cell::sync::Lazy;
 use gtk::prelude::*;
 
-mod config;
-mod indexing;
 mod result_templates;
 mod search;
 mod search_modules;
 mod utils;
+mod biases;
+mod icon;
 
 static CONTROL: AtomicBool = AtomicBool::new(false);
 
 use search_modules::{SearchModule, SearchResult};
-
-pub static CONF: Lazy<Config> = Lazy::new(|| match config::load_config() {
-    Ok(config) => config,
-    Err(_) => {
-        println!("Failed to load config");
-        Config::default()
-    }
-});
 
 pub static SEARCH_MODULES: Lazy<Vec<Box<dyn SearchModule + Sync + Send>>> =
     Lazy::new(|| search_modules::load_standard_modules());
@@ -79,9 +71,11 @@ fn main() {
 
         let mut current_task_handle: Arc<Mutex<Vec<AbortHandle>>> = Arc::new(Mutex::new(vec![]));
 
+        let current_task_handle_cpy = current_task_handle.clone();
+        let rt_cpy = rt.clone();
         search_field.connect_changed(move |entry| {
+            let current_task_handle = current_task_handle_cpy.clone();
             {
-                let current_task_handle = current_task_handle.clone();
                 let mut current_task_handle = current_task_handle.lock().unwrap();
                 for handle in current_task_handle.iter() {
                     handle.abort();
@@ -94,27 +88,15 @@ fn main() {
                 let children = list.list.children();
                 for child in children {
                     free_entry_data(&child);
-
                     list.list.remove(&child);
                 }
             }
 
             let list = list_cpy.clone();
-            let rt = rt.clone();
+            let rt = rt_cpy.clone();
             let query = entry.text().to_string();
 
-            SEARCH_MODULES
-                .iter()
-                .map(|module| module.search(query.clone(), 10))
-                .for_each(|f| {
-                    let list = list.clone();
-                    let (task, handle) = abortable(async move {
-                        let results = f.await;
-                        append_results(results, list.clone()).await;
-                    });
-                    current_task_handle.lock().unwrap().push(handle);
-                    rt.lock().unwrap().spawn(task);
-                });
+            perform_search(query, list, current_task_handle.clone(), rt);
         });
 
         let list_cpy = list.clone();
@@ -173,9 +155,27 @@ fn main() {
 
         window.set_child(Some(&container));
         window.show_all();
+
+        perform_search("".to_string(), list.clone(), current_task_handle.clone(), rt.clone());
     });
 
     application.run();
+
+}
+
+fn perform_search(query: String, list: Arc<Mutex<SafeListBox>>, current_task_handle: Arc<Mutex<Vec<AbortHandle>>>, rt: Arc<Mutex<tokio::runtime::Runtime>>) {
+    SEARCH_MODULES
+        .iter()
+        .map(|module| module.search(query.clone(), 10))
+        .for_each(|f| {
+            let list = list.clone();
+            let (task, handle) = abortable(async move {
+                let results = f.await;
+                append_results(results, list.clone()).await;
+            });
+            current_task_handle.lock().unwrap().push(handle);
+            rt.lock().unwrap().spawn(task);
+        });
 }
 
 fn perform_entry_action(row: gtk::ListBoxRow) {
@@ -184,6 +184,7 @@ fn perform_entry_action(row: gtk::ListBoxRow) {
         Box::new(|data| {
             if let Some(action) = data.action.as_ref() {
                 action();
+                increment_bias(data.id, 0.2);
                 std::process::exit(0);
             }
         }),
@@ -388,6 +389,17 @@ pub async fn append_results(results: Vec<SearchResult>, list: Arc<std::sync::Mut
             }
 
             entry.show_all();
+        }
+
+        // let rect = Rectangle::new(0, 0, 300, 400);
+        // list.list.size_allocate(&rect);
+
+        const max_entries: usize = 10;
+        while list.list.children().len() > max_entries {
+            let children = list.list.children();
+            let last_child = children.last().unwrap();
+            free_entry_data(&last_child);
+            list.list.remove(last_child);
         }
 
         if list.list.selected_row().is_none()

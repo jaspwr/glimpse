@@ -1,14 +1,15 @@
 use std::sync::Arc;
 
-use crate::{CONF, SafeListBox};
+use crate::SafeListBox;
 use async_trait::async_trait;
-use gtk::traits::{WidgetExt, ListBoxExt};
+use gtk::traits::{ListBoxExt, WidgetExt};
+use prober::config::CONF;
 
 pub struct SearchResult {
     pub render: Box<dyn Fn() -> gtk::Box>,
     pub relevance: f32,
     pub on_select: Option<Box<dyn Fn() + Sync + Send>>,
-    pub id: u64
+    pub id: u64,
 }
 
 unsafe impl Send for SearchResult {}
@@ -21,10 +22,10 @@ pub trait SearchModule {
     async fn search(&self, query: String, max_results: u32) -> Vec<SearchResult>;
 }
 
-
 mod commands;
 mod dictionary;
 mod steam_games;
+mod files;
 
 pub fn load_standard_modules() -> Vec<BoxedSearchModule> {
     let mut ret = Vec::<BoxedSearchModule>::new();
@@ -40,6 +41,9 @@ pub fn load_standard_modules() -> Vec<BoxedSearchModule> {
     if CONF.modules.steam_games {
         ret.push(Box::new(steam_games::SteamGames::new()));
     }
+
+    //TODO conf
+    ret.push(Box::new(files::Files::new()));
 
     ret
 }

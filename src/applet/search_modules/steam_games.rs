@@ -2,9 +2,9 @@ use std::{collections::HashMap, fs};
 
 use async_trait::async_trait;
 use execute::Execute;
-use gtk::traits::ContainerExt;
+use prober::config::CONF;
 
-use crate::{search::string_search, CONF, result_templates::standard_entry};
+use crate::{result_templates::standard_entry, search::string_search, utils::simple_hash};
 
 use super::{SearchModule, SearchResult};
 
@@ -24,21 +24,25 @@ struct Game {
 impl SearchModule for SteamGames {
     async fn search(&self, query: String, max_results: u32) -> Vec<SearchResult> {
         let query = query.to_lowercase();
-        string_search(&query, &self.game_names, max_results, None)
+        string_search(&query, &self.game_names, max_results, Box::new(id_hash), false)
             .into_iter()
             .map(|(s, r)| self.create_result(s, r))
             .collect::<Vec<SearchResult>>()
     }
 }
 
+fn id_hash(name: &String) -> u64 {
+    simple_hash(name) + 0x0e0e00e0e00e
+}
+
 impl SteamGames {
     fn create_result(&self, name: String, relevance: f32) -> SearchResult {
         let id = *self.game_ids.get(&name).unwrap();
-        let name = self.cased_game_names.get(&name).unwrap().clone();
+        let cased_name = self.cased_game_names.get(&name).unwrap().clone();
         let render = move || {
             // TODO: icon for not found.
             let icon = find_icon(id);
-            standard_entry(name.clone(), icon, None)
+            standard_entry(cased_name.clone(), icon, None)
         };
 
         let on_select = move || {
@@ -51,7 +55,7 @@ impl SteamGames {
         SearchResult {
             render: Box::new(render),
             relevance,
-            id: id as u64,
+            id: id_hash(&name),
             on_select: Some(Box::new(on_select)),
         }
     }
@@ -101,7 +105,8 @@ impl SteamGames {
             .map(|g| g.name.to_lowercase())
             .collect::<Vec<String>>();
 
-        let cased_game_names = game_names.clone()
+        let cased_game_names = game_names
+            .clone()
             .into_iter()
             .zip(cased_game_names.clone())
             .collect::<HashMap<String, String>>();
