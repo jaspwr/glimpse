@@ -1,13 +1,17 @@
+use std::sync::{Arc, Mutex};
+
 use async_trait::async_trait;
 use execute::Execute;
 use prober::indexing::{tokenize_string, Index};
 
-use crate::{icon, result_templates::standard_entry, search::string_search, utils::simple_hash};
+use crate::{
+    icon, result_templates::standard_entry, search::string_search, utils::simple_hash, BoxedRuntime,
+};
 
 use super::{SearchModule, SearchResult};
 
 pub struct Files {
-    index: Option<Index>,
+    index: Arc<Mutex<Option<Index>>>,
 }
 
 enum FileType {
@@ -17,8 +21,15 @@ enum FileType {
 
 #[async_trait]
 impl SearchModule for Files {
+    fn is_ready(&self) -> bool {
+        let index = self.index.lock().unwrap();
+        index.is_some()
+    }
+
     async fn search(&self, query: String, max_results: u32) -> Vec<SearchResult> {
-        if let Some(index) = &self.index {
+        let index = self.index.lock().unwrap();
+
+        if let Some(index) = index.as_ref() {
             let query = query.to_lowercase();
 
             let mut files =
@@ -159,8 +170,18 @@ fn id_hash(name: &String) -> u64 {
 }
 
 impl Files {
-    pub fn new() -> Files {
-        let index = Index::load("index");
+    pub fn new(rt: BoxedRuntime) -> Files {
+        let index = Arc::new(Mutex::new(None));
+
+        let index_cpy = index.clone();
+        rt.lock().unwrap().spawn(async move {
+            let store = index_cpy.clone();
+
+            let index = Index::load("index").await;
+
+            let mut lock = store.lock().unwrap();
+            *lock = index;
+        });
 
         Files { index }
     }

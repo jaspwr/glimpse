@@ -33,7 +33,7 @@ impl Index {
         savefile::save(&mut file, 0, self).unwrap();
     }
 
-    pub fn load(name: &str) -> Option<Index> {
+    pub async fn load(name: &str) -> Option<Index> {
         match std::fs::File::open(PATH.join(name).with_extension("bin")) {
             Ok(mut file) => match savefile::load(&mut file, 0) {
                 Ok(index) => Some(index),

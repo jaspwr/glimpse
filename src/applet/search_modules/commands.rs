@@ -1,6 +1,6 @@
 use std::{
     fs,
-    process::{Command, Stdio},
+    process::{Command, Stdio}, cell::RefCell, rc::Rc, sync::{Arc, Mutex},
 };
 
 use async_trait::async_trait;
@@ -12,13 +12,14 @@ use crate::{
     biases::{Biases, BIASES},
     result_templates::standard_entry,
     search::string_search,
-    utils, icon,
+    utils, icon, BoxedRuntime,
 };
 
 use super::{SearchModule, SearchResult};
 
 pub struct Commands {
-    apps: Vec<String>,
+    apps: Arc<Mutex<Option<Vec<String>>>>,
+
 }
 
 unsafe impl Send for Commands {}
@@ -29,9 +30,18 @@ fn id_hash(name: &String) -> u64 {
 }
 
 impl Commands {
-    pub fn new() -> Commands {
+    pub fn new(rt: BoxedRuntime) -> Commands {
+        let apps_store = Arc::new(Mutex::new(None));
+
+        let apps_store_cpy = apps_store.clone();
+        rt.lock().unwrap().spawn(async move {
+            let app = get_list().unwrap();
+            let mut store = apps_store_cpy.lock().unwrap();
+            *store = Some(app);
+        });
+
         Commands {
-            apps: get_list().unwrap(),
+            apps: apps_store,
         }
     }
 
@@ -85,11 +95,21 @@ impl Commands {
 
 #[async_trait]
 impl SearchModule for Commands {
+    fn is_ready(&self) -> bool {
+        self.apps.lock().unwrap().is_some()
+    }
+
     async fn search(&self, query: String, max_results: u32) -> Vec<SearchResult> {
-        string_search(&query, &self.apps, max_results, Box::new(id_hash), true)
-            .into_iter()
-            .map(|(s, r)| self.create_result(s, r + 0.3))
-            .collect()
+        let rc = self.apps.clone();
+        let lock = rc.lock().unwrap();
+        if let Some(apps) = lock.as_ref() {
+            string_search(&query, apps, max_results, Box::new(id_hash), true)
+                .into_iter()
+                .map(|(s, r)| self.create_result(s, r + 0.3))
+                .collect()
+        } else {
+            vec![]
+        }
     }
 }
 
@@ -120,7 +140,7 @@ fn spawn_in_terminal(name: &String) {
         CONF.misc.preferred_terminal.as_str(),
         name
     ));
-    let proc = command.execute();
+    let _ = command.execute();
 }
 
 fn execute_detached(name: String) {

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::SafeListBox;
+use crate::{SafeListBox, BoxedRuntime};
 use async_trait::async_trait;
 use gtk::traits::{ListBoxExt, WidgetExt};
 use prober::config::CONF;
@@ -19,6 +19,7 @@ pub type BoxedSearchModule = Box<dyn SearchModule + Sync + Send>;
 
 #[async_trait]
 pub trait SearchModule {
+    fn is_ready(&self) -> bool;
     async fn search(&self, query: String, max_results: u32) -> Vec<SearchResult>;
 }
 
@@ -28,11 +29,11 @@ mod steam_games;
 mod files;
 mod calculator;
 
-pub fn load_standard_modules() -> Vec<BoxedSearchModule> {
+pub fn load_standard_modules(rt: BoxedRuntime) -> Vec<BoxedSearchModule> {
     let mut ret = Vec::<BoxedSearchModule>::new();
 
     if CONF.modules.commands {
-        ret.push(Box::new(commands::Commands::new()));
+        ret.push(Box::new(commands::Commands::new(rt.clone())));
     }
 
     if CONF.modules.web_modules.dictionary {
@@ -40,11 +41,11 @@ pub fn load_standard_modules() -> Vec<BoxedSearchModule> {
     }
 
     if CONF.modules.steam_games {
-        ret.push(Box::new(steam_games::SteamGames::new()));
+        ret.push(Box::new(steam_games::SteamGames::new(rt.clone())));
     }
 
     //TODO conf
-    ret.push(Box::new(files::Files::new()));
+    ret.push(Box::new(files::Files::new(rt.clone())));
 
     ret.push(Box::new(calculator::Calculator::new()));
 

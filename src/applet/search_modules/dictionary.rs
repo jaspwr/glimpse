@@ -1,13 +1,7 @@
-use std::process::{Command, Stdio};
-
-
 use async_trait::async_trait;
-use execute::Execute;
-use gdk::pango::ffi::PangoAttrClass;
 use gtk::traits::{ContainerExt, GridExt, WidgetExt, LabelExt};
-use http::Request;
 
-use crate::{result_templates::standard_entry, search::string_search, utils};
+use crate::utils;
 
 use super::{SearchModule, SearchResult};
 
@@ -21,11 +15,15 @@ impl Dictionary {
 
 #[async_trait]
 impl SearchModule for Dictionary {
+    fn is_ready(&self) -> bool {
+        true
+    }
+
     async fn search(&self, query: String, _: u32) -> Vec<SearchResult> {
         // wait 0.5 seconds to allow the user to type more
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
-        let mut query = query;
+        let mut query = query.to_lowercase();
         let mut relevance: f32 = 1.5;
 
         if query.len() == 0 {
@@ -43,8 +41,14 @@ impl SearchModule for Dictionary {
             relevance += 2.0;
         }
 
+        for c in query.chars() {
+            if !c.is_alphanumeric() {
+                return vec![];
+            }
+        }
+
         let body = reqwest::get(format!("https://api.dictionaryapi.dev/api/v2/entries/en/{}", query))
-                .await.unwrap().text().await.unwrap();
+            .await.unwrap().text().await.unwrap();
 
         match create_result(body, relevance) {
             Some(result) => vec![result],

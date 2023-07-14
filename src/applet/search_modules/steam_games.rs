@@ -1,18 +1,21 @@
-use std::{collections::HashMap, fs};
+use std::{
+    collections::HashMap,
+    fs,
+    ops::ControlFlow,
+    sync::{Arc, Mutex},
+};
 
 use async_trait::async_trait;
 use execute::Execute;
-use prober::config::CONF;
 
-use crate::{result_templates::standard_entry, search::string_search, utils::simple_hash, icon};
+use crate::{
+    icon, result_templates::standard_entry, search::string_search, utils::simple_hash, BoxedRuntime,
+};
 
 use super::{SearchModule, SearchResult};
 
-#[derive(Debug)]
 pub struct SteamGames {
-    game_names: Vec<String>,
-    game_ids: HashMap<String, u32>,
-    cased_game_names: HashMap<String, String>,
+    data: Arc<Mutex<Option<GamesData>>>,
 }
 
 struct Game {
@@ -20,14 +23,37 @@ struct Game {
     appid: u32,
 }
 
+struct GamesData {
+    game_names: Vec<String>,
+    game_ids: HashMap<String, u32>,
+    cased_game_names: HashMap<String, String>,
+}
+
 #[async_trait]
 impl SearchModule for SteamGames {
+    fn is_ready(&self) -> bool {
+        let lock = self.data.lock().unwrap();
+        lock.is_some()
+    }
+
     async fn search(&self, query: String, max_results: u32) -> Vec<SearchResult> {
         let query = query.to_lowercase();
-        string_search(&query, &self.game_names, max_results, Box::new(id_hash), false)
-            .into_iter()
-            .map(|(s, r)| self.create_result(s, r))
-            .collect::<Vec<SearchResult>>()
+        let data = self.data.lock().unwrap();
+
+        if data.is_none() {
+            return vec![];
+        }
+
+        string_search(
+            &query,
+            &data.as_ref().unwrap().game_names,
+            max_results,
+            Box::new(id_hash),
+            false,
+        )
+        .into_iter()
+        .map(|(s, r)| create_result(data.as_ref().unwrap(), s, r))
+        .collect::<Vec<SearchResult>>()
     }
 }
 
@@ -35,34 +61,48 @@ fn id_hash(name: &String) -> u64 {
     simple_hash(name) + 0x0e0e00e0e00e
 }
 
-impl SteamGames {
-    fn create_result(&self, name: String, relevance: f32) -> SearchResult {
-        let id = *self.game_ids.get(&name).unwrap();
-        let cased_name = self.cased_game_names.get(&name).unwrap().clone();
-        let render = move || {
-            // TODO: icon for not found.
-            let icon = find_icon(id);
-            standard_entry(cased_name.clone(), icon, None)
-        };
+fn create_result(data: &GamesData, name: String, relevance: f32) -> SearchResult {
+    let id = *data.game_ids.get(&name).unwrap();
+    let cased_name = data.cased_game_names.get(&name).unwrap().clone();
+    let render = move || {
+        // TODO: icon for not found.
+        let icon = find_icon(id);
+        standard_entry(cased_name.clone(), icon, None)
+    };
 
-        let on_select = move || {
-            let mut command = std::process::Command::new("bash");
-            command.arg("-c");
-            command.arg(format!("steam steam://rungameid/{} & disown", id.clone()));
-            let _ = command.execute();
-        };
+    let on_select = move || {
+        let mut command = std::process::Command::new("bash");
+        command.arg("-c");
+        command.arg(format!("steam steam://rungameid/{} & disown", id.clone()));
+        let _ = command.execute();
+    };
 
-        SearchResult {
-            render: Box::new(render),
-            relevance,
-            id: id_hash(&name),
-            on_select: Some(Box::new(on_select)),
-        }
+    SearchResult {
+        render: Box::new(render),
+        relevance,
+        id: id_hash(&name),
+        on_select: Some(Box::new(on_select)),
     }
 }
 
 impl SteamGames {
-    pub fn new() -> SteamGames {
+    pub fn new(rt: BoxedRuntime) -> SteamGames {
+        let data = Arc::new(Mutex::new(None));
+
+        let data_cpy = data.clone();
+        rt.lock().unwrap().spawn(async move {
+            let store = data_cpy.clone();
+            let data = Some(GamesData::new());
+            let mut lock = store.lock().unwrap();
+            *lock = data;
+        });
+
+        SteamGames { data }
+    }
+}
+
+impl GamesData {
+    fn new() -> Self {
         let home = home::home_dir().unwrap();
         let steamapps = home.join(".steam").join("steam").join("steamapps");
 
@@ -70,27 +110,9 @@ impl SteamGames {
         if let Ok(dir) = fs::read_dir(steamapps) {
             for entry in dir {
                 if let Ok(entry) = entry {
-                    if entry.file_type().unwrap().is_dir() {
+                    if let ControlFlow::Break(_) = handle_dir_entry(entry, &mut games) {
                         continue;
                     }
-                    let name = entry.file_name().into_string().unwrap();
-
-                    if name.len() < 4 || &name[name.len() - 4..] != ".acf" {
-                        continue;
-                    }
-
-                    let mut appid = 0;
-                    let mut name = String::from("");
-                    let file = fs::read_to_string(entry.path()).unwrap();
-                    file.lines().into_iter().for_each(|l| {
-                        if l.starts_with("\t\"appid\"") {
-                            appid = l.split("\"").nth(3).unwrap().parse::<u32>().unwrap();
-                        } else if l.starts_with("\t\"name\"") {
-                            name = l.split("\"").nth(3).unwrap().to_string();
-                        }
-                    });
-
-                    games.push(Game { name, appid });
                 }
             }
         }
@@ -116,12 +138,35 @@ impl SteamGames {
             .map(|g| (g.name.to_lowercase(), g.appid))
             .collect::<HashMap<String, u32>>();
 
-        SteamGames {
+        GamesData {
             game_names,
             game_ids,
             cased_game_names,
         }
     }
+}
+
+fn handle_dir_entry(entry: fs::DirEntry, games: &mut Vec<Game>) -> ControlFlow<()> {
+    if entry.file_type().unwrap().is_dir() {
+        return ControlFlow::Break(());
+    }
+    let name = entry.file_name().into_string().unwrap();
+    if name.len() < 4 || &name[name.len() - 4..] != ".acf" {
+        return ControlFlow::Break(());
+    }
+    let mut appid = 0;
+    let mut name = String::from("");
+    let file = fs::read_to_string(entry.path()).unwrap();
+    file.lines().into_iter().for_each(|l| {
+        if l.starts_with("\t\"appid\"") {
+            appid = l.split("\"").nth(3).unwrap().parse::<u32>().unwrap();
+        } else if l.starts_with("\t\"name\"") {
+            name = l.split("\"").nth(3).unwrap().to_string();
+        }
+    });
+    games.push(Game { name, appid });
+
+    ControlFlow::Continue(())
 }
 
 fn find_icon(appid: u32) -> Option<gtk::Image> {

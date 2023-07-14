@@ -1,35 +1,37 @@
-use std::{
-    mem,
-    ops::ControlFlow,
-    sync::{
-        atomic::{AtomicBool, AtomicU32, Ordering},
-        Arc, Mutex,
-    },
-    time::{self, Duration},
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
 };
 
 use biases::increment_bias;
 use futures::{future::abortable, stream::AbortHandle, Future};
-use gdk::{glib::idle_add_once, ffi::GdkRectangle, Rectangle, SeatCapabilities};
 use gdk::glib::once_cell::sync::Lazy;
+use gdk::{ffi::GdkRectangle, glib::idle_add_once, Rectangle, SeatCapabilities};
 use gtk::prelude::*;
 
+mod biases;
+mod icon;
+mod prelude;
 mod result_templates;
 mod search;
 mod search_modules;
 mod utils;
-mod biases;
-mod icon;
-mod prelude;
 
 static CONTROL: AtomicBool = AtomicBool::new(false);
 
 use search_modules::{SearchModule, SearchResult};
 
+pub static RUNTIME: Lazy<BoxedRuntime> = Lazy::new(|| {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    Arc::new(Mutex::new(rt))
+});
+
 pub static SEARCH_MODULES: Lazy<Vec<Box<dyn SearchModule + Sync + Send>>> =
-    Lazy::new(|| search_modules::load_standard_modules());
+    Lazy::new(|| search_modules::load_standard_modules(RUNTIME.clone()));
 
 pub static FAKE_FIRST_SELECTED: Lazy<Mutex<bool>> = Lazy::new(|| Mutex::new(false));
+
+pub type BoxedRuntime = Arc<Mutex<tokio::runtime::Runtime>>;
 
 fn main() {
     let application = gtk::Application::builder()
@@ -162,16 +164,26 @@ fn main() {
             gtk::Inhibit(false)
         });
 
-        perform_search("".to_string(), list.clone(), current_task_handle.clone(), rt.clone());
+        perform_search(
+            "".to_string(),
+            list.clone(),
+            current_task_handle.clone(),
+            rt.clone(),
+        );
     });
 
     application.run();
-
 }
 
-fn perform_search(query: String, list: Arc<Mutex<SafeListBox>>, current_task_handle: Arc<Mutex<Vec<AbortHandle>>>, rt: Arc<Mutex<tokio::runtime::Runtime>>) {
+fn perform_search(
+    query: String,
+    list: Arc<Mutex<SafeListBox>>,
+    current_task_handle: Arc<Mutex<Vec<AbortHandle>>>,
+    rt: BoxedRuntime,
+) {
     SEARCH_MODULES
         .iter()
+        .filter(|module| module.is_ready())
         .map(|module| module.search(query.clone(), 10))
         .for_each(|f| {
             let list = list.clone();
@@ -408,8 +420,7 @@ pub async fn append_results(results: Vec<SearchResult>, list: Arc<std::sync::Mut
             list.list.remove(last_child);
         }
 
-        if list.list.selected_row().is_none()
-            || FAKE_FIRST_SELECTED.lock().unwrap().clone() {
+        if list.list.selected_row().is_none() || FAKE_FIRST_SELECTED.lock().unwrap().clone() {
             if let Some(first_row) = list.list.row_at_index(0) {
                 list.list.select_row(Some(&first_row));
             }
@@ -452,17 +463,15 @@ fn grab_seat(window: &gtk::gdk::Window) {
     let seat = display.default_seat().unwrap();
 
     let capabilities = gdk_sys::GDK_SEAT_CAPABILITY_POINTER
-        | gdk_sys::GDK_SEAT_CAPABILITY_KEYBOARD;
+    /* | gdk_sys::GDK_SEAT_CAPABILITY_KEYBOARD */;
 
     let status = seat.grab(
         window,
-        unsafe {
-            SeatCapabilities::from_bits_unchecked(capabilities)
-        },
+        unsafe { SeatCapabilities::from_bits_unchecked(capabilities) },
         true,
         None,
         None,
-        None
+        None,
     );
 
     if status != gtk::gdk::GrabStatus::Success {

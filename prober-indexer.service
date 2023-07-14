@@ -1,0 +1,14 @@
+[Unit]
+Description=prober-indexer
+
+[Service]
+ExecStart=/home/jasper/dev/prober/target/release/prober-indexer
+Type=oneshot
+RemainAfterExit=yes
+
+[Timer]
+OnCalendar=daily
+AccuracySec=1h
+
+[Install]
+WantedBy=multi-user.target

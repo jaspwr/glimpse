@@ -9,6 +9,10 @@ pub struct Calculator {}
 
 #[async_trait]
 impl SearchModule for Calculator {
+    fn is_ready(&self) -> bool {
+        true
+    }
+
     async fn search(&self, query: String, _: u32) -> Vec<SearchResult> {
         let solution = tokenize(&query)
             // .bind(swap_words)
@@ -17,22 +21,7 @@ impl SearchModule for Calculator {
 
         if let Some(solution) = solution {
             let render = Box::new(move || {
-                let word_attributes = pango::AttrList::new();
-                let mut word_desc = pango::FontDescription::from_string("24");
-                word_desc.set_family("Times New Roman");
-                let word_size_attrib = pango::AttrFontDesc::new(&word_desc);
-                word_attributes.insert(word_size_attrib);
-
-                let solution = format!("= {}", solution);
-                let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
-                let label = gtk::Label::new(Some(solution.clone().as_str()));
-
-                label.set_attributes(Some(&word_attributes));
-                label.set_halign(gtk::Align::Start);
-
-                container.add(&label);
-                container.set_margin(15);
-                container
+                render(solution.clone())
             });
 
             vec![SearchResult {
@@ -45,6 +34,25 @@ impl SearchModule for Calculator {
             vec![]
         }
     }
+}
+
+fn render(solution: String) -> gtk::Box {
+    let word_attributes = pango::AttrList::new();
+    let mut word_desc = pango::FontDescription::from_string("24");
+    word_desc.set_family("Times New Roman");
+    let word_size_attrib = pango::AttrFontDesc::new(&word_desc);
+    word_attributes.insert(word_size_attrib);
+
+    let solution = format!("= {}", solution);
+    let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    let label = gtk::Label::new(Some(solution.as_str()));
+
+    label.set_attributes(Some(&word_attributes));
+    label.set_halign(gtk::Align::Start);
+
+    container.add(&label);
+    container.set_margin(15);
+    container
 }
 
 fn fmt_number(n: f64) -> Option<String> {
@@ -190,6 +198,8 @@ fn try_consume(ts: &Tokens, matching: Token) -> Option<Tokens> {
         None
     }
 }
+
+// TODO: Unary minus and plus
 
 fn add(ts: Tokens) -> Option<(Tokens, f64)> {
     sub(ts)
