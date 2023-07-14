@@ -4,9 +4,9 @@ use std::sync::{
 };
 
 use biases::increment_bias;
-use futures::{future::abortable, stream::AbortHandle, Future};
+use futures::{future::abortable, stream::AbortHandle};
 use gdk::glib::once_cell::sync::Lazy;
-use gdk::{ffi::GdkRectangle, glib::idle_add_once, Rectangle, SeatCapabilities};
+use gdk::{glib::idle_add_once, SeatCapabilities};
 use gtk::prelude::*;
 
 mod biases;

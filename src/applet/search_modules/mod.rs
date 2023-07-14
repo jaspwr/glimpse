@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{SafeListBox, BoxedRuntime};
+use crate::{BoxedRuntime, SafeListBox};
 use async_trait::async_trait;
 use gtk::traits::{ListBoxExt, WidgetExt};
 use prober::config::CONF;
@@ -23,11 +23,11 @@ pub trait SearchModule {
     async fn search(&self, query: String, max_results: u32) -> Vec<SearchResult>;
 }
 
+mod calculator;
 mod commands;
 mod dictionary;
-mod steam_games;
 mod files;
-mod calculator;
+mod steam_games;
 
 pub fn load_standard_modules(rt: BoxedRuntime) -> Vec<BoxedSearchModule> {
     let mut ret = Vec::<BoxedSearchModule>::new();

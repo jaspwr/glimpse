@@ -17,7 +17,7 @@ pub struct Config {
     pub modules: Modules,
     pub use_web_modules: bool,
     pub visual: Visual,
-    pub misc: Misc
+    pub misc: Misc,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -29,7 +29,6 @@ pub struct Modules {
     pub steam_games: bool,
     pub web_modules: WebModules,
 }
-
 
 #[derive(Serialize, Deserialize)]
 pub struct Misc {
@@ -64,7 +63,11 @@ pub fn load_config() -> Result<Config, ()> {
         let config_path = home.join(".config").join("prober").join("config.toml");
         if let Ok(file) = std::fs::File::open(config_path.clone()) {
             let file = BufReader::new(file);
-            let file = file.lines().collect::<Result<Vec<String>, _>>().unwrap().join("\n");
+            let file = file
+                .lines()
+                .collect::<Result<Vec<String>, _>>()
+                .unwrap()
+                .join("\n");
             return Ok(toml::from_str(&file).unwrap());
         } else {
             let mut default_config = Config::default();
@@ -72,7 +75,9 @@ pub fn load_config() -> Result<Config, ()> {
             default_config.indexing.location = home
                 .join(".cache")
                 .join("prober")
-                .to_str().unwrap().to_string();
+                .to_str()
+                .unwrap()
+                .to_string();
 
             let toml = toml::to_string(&default_config).unwrap();
             let config_folder = home.join(".config").join("prober");
@@ -102,7 +107,7 @@ impl Default for Config {
                     web_bookmarks: true,
                     web_history: true,
                     dictionary: true,
-                }
+                },
             },
             use_web_modules: false,
             visual: Visual {
@@ -113,7 +118,7 @@ impl Default for Config {
             misc: Misc {
                 display_command_paths: false,
                 preferred_terminal: String::from("xterm"),
-            }
+            },
         }
     }
 }

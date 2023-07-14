@@ -1,4 +1,4 @@
-use gtk::traits::{GridExt, ContainerExt, WidgetExt};
+use gtk::traits::{ContainerExt, GridExt, WidgetExt};
 
 use crate::prelude::*;
 

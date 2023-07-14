@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use execute::Execute;
@@ -11,7 +11,7 @@ use crate::{
 use super::{SearchModule, SearchResult};
 
 pub struct Files {
-    index: Arc<Mutex<Option<Index>>>,
+    index: Arc<tokio::sync::Mutex<Option<Index>>>,
 }
 
 enum FileType {
@@ -22,12 +22,13 @@ enum FileType {
 #[async_trait]
 impl SearchModule for Files {
     fn is_ready(&self) -> bool {
-        let index = self.index.lock().unwrap();
-        index.is_some()
+        // let index = self.index.lock().unwrap();
+        // index.is_some()
+        true
     }
 
     async fn search(&self, query: String, max_results: u32) -> Vec<SearchResult> {
-        let index = self.index.lock().unwrap();
+        let index = self.index.lock().await;
 
         if let Some(index) = index.as_ref() {
             let query = query.to_lowercase();
@@ -171,15 +172,16 @@ fn id_hash(name: &String) -> u64 {
 
 impl Files {
     pub fn new(rt: BoxedRuntime) -> Files {
-        let index = Arc::new(Mutex::new(None));
+        let index = Arc::new(tokio::sync::Mutex::new(None));
 
         let index_cpy = index.clone();
         rt.lock().unwrap().spawn(async move {
             let store = index_cpy.clone();
+            let mut lock = store.lock().await;
+            // This lock needs to be held until we are finish with initalisation
 
             let index = Index::load("index").await;
 
-            let mut lock = store.lock().unwrap();
             *lock = index;
         });
 

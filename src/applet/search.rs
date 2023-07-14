@@ -1,4 +1,4 @@
-use crate::{biases::{Biases, BIASES}};
+use crate::biases::BIASES;
 
 pub fn string_search(
     needle: &String,

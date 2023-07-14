@@ -1,11 +1,6 @@
-use std::{
-    collections::HashMap,
-    fs::DirEntry,
-    io::{BufRead, BufReader},
-    path::PathBuf,
-};
+use std::{collections::HashMap, fs::DirEntry, path::PathBuf};
 
-use prober::indexing::{Index, tokenize_file};
+use prober::indexing::{tokenize_file, Index};
 
 fn main() {
     reindex();
@@ -23,7 +18,7 @@ fn reindex() {
         "zig-cache",
         "zig-out",
         "_prefix32_wine",
-        "x86_64-pc-linux-gnu-library"
+        "x86_64-pc-linux-gnu-library",
     ];
 
     let _ = index_dir(&path, &false, &mut files, &mut dirs, &ignore_dirs);

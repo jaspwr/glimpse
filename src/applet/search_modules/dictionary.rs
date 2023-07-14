@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use gtk::traits::{ContainerExt, GridExt, WidgetExt, LabelExt};
+use gtk::traits::{ContainerExt, GridExt, LabelExt, WidgetExt};
 
 use crate::utils;
 
@@ -8,7 +8,7 @@ use super::{SearchModule, SearchResult};
 pub struct Dictionary {}
 
 impl Dictionary {
-    pub fn new() -> Dictionary  {
+    pub fn new() -> Dictionary {
         Dictionary {}
     }
 }
@@ -47,12 +47,13 @@ impl SearchModule for Dictionary {
             }
         }
 
+        #[rustfmt::skip]
         let body = reqwest::get(format!("https://api.dictionaryapi.dev/api/v2/entries/en/{}", query))
             .await.unwrap().text().await.unwrap();
 
         match create_result(body, relevance) {
             Some(result) => vec![result],
-            None => vec![]
+            None => vec![],
         }
     }
 }
@@ -60,27 +61,27 @@ impl SearchModule for Dictionary {
 fn create_result(response: String, relevance: f32) -> Option<SearchResult> {
     let response: serde_json::Value = match serde_json::from_str(&response) {
         Ok(response) => response,
-        Err(_) => return None
+        Err(_) => return None,
     };
 
     let word = match response[0]["word"].as_str() {
         Some(word) => word.to_string(),
-        None => return None
+        None => return None,
     };
 
     let phonetics = match response[0]["phonetics"][1]["text"].as_str() {
         Some(phonetics) => Some(phonetics.to_string()),
-        None => None // Could really use a >>= right now
+        None => None, // Could really use a >>= right now
     };
 
     let part_of_speach = match response[0]["meanings"][0]["partOfSpeech"].as_str() {
         Some(particle_of_speach) => particle_of_speach.to_string(),
-        None => "".to_string()
+        None => "".to_string(),
     };
 
     let definition = match response[0]["meanings"][0]["definitions"][0]["definition"].as_str() {
         Some(definition) => definition.to_string(),
-        None => return None
+        None => return None,
     };
 
     let id = utils::simple_hash(&word) + 0xa0a0a0a0;
@@ -114,7 +115,6 @@ fn create_result(response: String, relevance: f32) -> Option<SearchResult> {
         word.set_halign(gtk::Align::Start);
         word.set_attributes(Some(&word_attributes));
 
-
         let particle_of_speach_attributes = pango::AttrList::new();
         let mut particle_of_speach_desc = pango::FontDescription::new();
         particle_of_speach_desc.set_weight(pango::Weight::Bold);
@@ -129,7 +129,10 @@ fn create_result(response: String, relevance: f32) -> Option<SearchResult> {
         definition.set_line_wrap_mode(pango::WrapMode::WordChar);
         definition.set_max_width_chars(40);
 
-        let dict_icon = gtk::Image::from_icon_name(Some("accessories-dictionary-symbolic"), gtk::IconSize::LargeToolbar);
+        let dict_icon = gtk::Image::from_icon_name(
+            Some("accessories-dictionary-symbolic"),
+            gtk::IconSize::LargeToolbar,
+        );
         dict_icon.set_halign(gtk::Align::Start);
         dict_icon.set_valign(gtk::Align::Start);
         dict_icon.set_margin(10);
@@ -137,7 +140,13 @@ fn create_result(response: String, relevance: f32) -> Option<SearchResult> {
 
         let grid = gtk::Grid::new();
         grid.attach(&dict_icon, 0, 0, 1, 1);
-        grid.attach_next_to(&def_container, Some(&dict_icon), gtk::PositionType::Right, 1, 1);
+        grid.attach_next_to(
+            &def_container,
+            Some(&dict_icon),
+            gtk::PositionType::Right,
+            1,
+            1,
+        );
 
         let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
         container.add(&grid);

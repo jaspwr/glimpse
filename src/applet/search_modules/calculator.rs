@@ -14,15 +14,14 @@ impl SearchModule for Calculator {
     }
 
     async fn search(&self, query: String, _: u32) -> Vec<SearchResult> {
+        #[rustfmt::skip]
         let solution = tokenize(&query)
             // .bind(swap_words)
             .bind(execute)
             .bind(fmt_number);
 
         if let Some(solution) = solution {
-            let render = Box::new(move || {
-                render(solution.clone())
-            });
+            let render = Box::new(move || render(solution.clone()));
 
             vec![SearchResult {
                 relevance: 20.0,
@@ -201,6 +200,7 @@ fn try_consume(ts: &Tokens, matching: Token) -> Option<Tokens> {
 
 // TODO: Unary minus and plus
 
+#[rustfmt::skip]
 fn add(ts: Tokens) -> Option<(Tokens, f64)> {
     sub(ts)
     .bind(|(ts, left)|
@@ -210,102 +210,103 @@ fn add(ts: Tokens) -> Option<(Tokens, f64)> {
     )
 }
 
+#[rustfmt::skip]
 fn add_prime(ts: Tokens) -> Option<(Tokens, f64)> {
     match try_consume(&ts, Token::Operator('+')) {
         Some(ts) => sub(ts)
             .bind(|(ts, left)|
                 add_prime(ts)
                 .bind(|(ts, right)|
-                    Some((ts, left + right)))
-            ),
+                    Some((ts, left + right)))),
         None => Some((ts, 0.0))
     }
 }
 
+#[rustfmt::skip]
 fn sub(ts: Tokens) -> Option<(Tokens, f64)> {
     mul(ts)
     .bind(|(ts, left)|
         sub_prime(ts)
         .bind(|(ts, right)|
-            Some((ts, left - right)))
-    )
+            Some((ts, left - right))))
 }
 
+#[rustfmt::skip]
 fn sub_prime(ts: Tokens) -> Option<(Tokens, f64)> {
     match try_consume(&ts, Token::Operator('-')) {
         Some(ts) => mul(ts)
             .bind(|(ts, left)|
                 sub_prime(ts)
                 .bind(|(ts, right)|
-                    Some((ts, left - right)))
-            ),
+                    Some((ts, left - right)))),
         None => Some((ts, 0.0))
     }
 }
 
+#[rustfmt::skip]
 fn mul(ts: Tokens) -> Option<(Tokens, f64)> {
     div(ts)
     .bind(|(ts, left)|
         mul_prime(ts)
         .bind(|(ts, right)|
-            Some((ts, left * right)))
-    )
+            Some((ts, left * right))))
 }
 
+#[rustfmt::skip]
 fn mul_prime(ts: Tokens) -> Option<(Tokens, f64)> {
     match try_consume(&ts, Token::Operator('*')) {
         Some(ts) => div(ts)
             .bind(|(ts, left)|
                 mul_prime(ts)
                 .bind(|(ts, right)|
-                    Some((ts, left * right)))
-            ),
+                    Some((ts, left * right)))),
         None => Some((ts, 1.0))
     }
 }
 
+#[rustfmt::skip]
 fn div(ts: Tokens) -> Option<(Tokens, f64)> {
     pow(ts)
     .bind(|(ts, left)|
         div_prime(ts)
         .bind(|(ts, right)|
-            Some((ts, left / right)))
-    )
+            Some((ts, left / right))))
 }
 
+#[rustfmt::skip]
 fn div_prime(ts: Tokens) -> Option<(Tokens, f64)> {
     match try_consume(&ts, Token::Operator('/')) {
         Some(ts) => pow(ts)
             .bind(|(ts, left)|
                 div_prime(ts)
                 .bind(|(ts, right)|
-                    Some((ts, left / right)))
-            ),
+                    Some((ts, left / right)))),
         None => Some((ts, 1.0))
     }
 }
 
+#[rustfmt::skip]
 fn pow(ts: Tokens) -> Option<(Tokens, f64)> {
     brack(ts)
     .bind(|(ts, left)|
         pow_prime(ts)
         .bind(|(ts, right)|
-            Some((ts, left.powf(right))))
-    )
+            Some((ts, left.powf(right)))))
 }
 
+#[rustfmt::skip]
 fn pow_prime(ts: Tokens) -> Option<(Tokens, f64)> {
     match try_consume(&ts, Token::Operator('^')) {
         Some(ts) => brack(ts)
             .bind(|(ts, left)|
                 pow_prime(ts)
                 .bind(|(ts, right)|
-                    Some((ts, left.powf(right))))
-            ),
+                    Some((ts, left.powf(right))))),
         None => Some((ts, 1.0))
     }
 }
 
+#[rustfmt::skip]
 fn brack(ts: Tokens) -> Option<(Tokens, f64)> {
     match try_consume(&ts, Token::Paren('(')) {
         Some(ts) => parse(ts)
@@ -313,8 +314,7 @@ fn brack(ts: Tokens) -> Option<(Tokens, f64)> {
                 match try_consume(&ts, Token::Paren(')')) {
                     Some(ts) => Some((ts, left)),
                     None => None
-                }
-            ),
+                }),
         None => literal(ts)
     }
 }

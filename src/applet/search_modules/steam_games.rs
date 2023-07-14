@@ -1,9 +1,4 @@
-use std::{
-    collections::HashMap,
-    fs,
-    ops::ControlFlow,
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashMap, fs, ops::ControlFlow, sync::Arc};
 
 use async_trait::async_trait;
 use execute::Execute;
@@ -15,7 +10,7 @@ use crate::{
 use super::{SearchModule, SearchResult};
 
 pub struct SteamGames {
-    data: Arc<Mutex<Option<GamesData>>>,
+    data: Arc<tokio::sync::Mutex<Option<GamesData>>>,
 }
 
 struct Game {
@@ -32,13 +27,14 @@ struct GamesData {
 #[async_trait]
 impl SearchModule for SteamGames {
     fn is_ready(&self) -> bool {
-        let lock = self.data.lock().unwrap();
-        lock.is_some()
+        // let lock = self.data.lock().unwrap();
+        // lock.is_some()
+        true
     }
 
     async fn search(&self, query: String, max_results: u32) -> Vec<SearchResult> {
         let query = query.to_lowercase();
-        let data = self.data.lock().unwrap();
+        let data = self.data.lock().await;
 
         if data.is_none() {
             return vec![];
@@ -87,13 +83,15 @@ fn create_result(data: &GamesData, name: String, relevance: f32) -> SearchResult
 
 impl SteamGames {
     pub fn new(rt: BoxedRuntime) -> SteamGames {
-        let data = Arc::new(Mutex::new(None));
+        let data = Arc::new(tokio::sync::Mutex::new(None));
 
         let data_cpy = data.clone();
         rt.lock().unwrap().spawn(async move {
             let store = data_cpy.clone();
+            let mut lock = store.lock().await;
+            // This lock needs to be held until the initialisation is done
+
             let data = Some(GamesData::new());
-            let mut lock = store.lock().unwrap();
             *lock = data;
         });
 
