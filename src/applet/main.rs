@@ -10,7 +10,7 @@ use std::{
 
 use biases::increment_bias;
 use futures::{future::abortable, stream::AbortHandle, Future};
-use gdk::{glib::idle_add_once, ffi::GdkRectangle, Rectangle};
+use gdk::{glib::idle_add_once, ffi::GdkRectangle, Rectangle, SeatCapabilities};
 use gdk::glib::once_cell::sync::Lazy;
 use gtk::prelude::*;
 
@@ -20,6 +20,7 @@ mod search_modules;
 mod utils;
 mod biases;
 mod icon;
+mod prelude;
 
 static CONTROL: AtomicBool = AtomicBool::new(false);
 
@@ -69,7 +70,7 @@ fn main() {
 
         let rt = Arc::new(Mutex::new(tokio::runtime::Runtime::new().unwrap()));
 
-        let mut current_task_handle: Arc<Mutex<Vec<AbortHandle>>> = Arc::new(Mutex::new(vec![]));
+        let current_task_handle: Arc<Mutex<Vec<AbortHandle>>> = Arc::new(Mutex::new(vec![]));
 
         let current_task_handle_cpy = current_task_handle.clone();
         let rt_cpy = rt.clone();
@@ -156,6 +157,11 @@ fn main() {
         window.set_child(Some(&container));
         window.show_all();
 
+        window.connect_focus_in_event(|window, _| {
+            grab_seat(&window.window().unwrap());
+            gtk::Inhibit(false)
+        });
+
         perform_search("".to_string(), list.clone(), current_task_handle.clone(), rt.clone());
     });
 
@@ -184,7 +190,7 @@ fn perform_entry_action(row: gtk::ListBoxRow) {
         Box::new(|data| {
             if let Some(action) = data.action.as_ref() {
                 action();
-                increment_bias(data.id, 0.2);
+                increment_bias(data.id, 0.5);
                 std::process::exit(0);
             }
         }),
@@ -394,8 +400,8 @@ pub async fn append_results(results: Vec<SearchResult>, list: Arc<std::sync::Mut
         // let rect = Rectangle::new(0, 0, 300, 400);
         // list.list.size_allocate(&rect);
 
-        const max_entries: usize = 10;
-        while list.list.children().len() > max_entries {
+        const MAX_ENTRIES: usize = 10;
+        while list.list.children().len() > MAX_ENTRIES {
             let children = list.list.children();
             let last_child = children.last().unwrap();
             free_entry_data(&last_child);
@@ -439,4 +445,27 @@ struct ResultData {
     relevance: f32,
     id: u64,
     action: Option<Box<dyn Fn() -> () + Sync + Send>>,
+}
+
+fn grab_seat(window: &gtk::gdk::Window) {
+    let display = window.display();
+    let seat = display.default_seat().unwrap();
+
+    let capabilities = gdk_sys::GDK_SEAT_CAPABILITY_POINTER
+        | gdk_sys::GDK_SEAT_CAPABILITY_KEYBOARD;
+
+    let status = seat.grab(
+        window,
+        unsafe {
+            SeatCapabilities::from_bits_unchecked(capabilities)
+        },
+        true,
+        None,
+        None,
+        None
+    );
+
+    if status != gtk::gdk::GrabStatus::Success {
+        println!("Grab failed: {:?}", status);
+    }
 }

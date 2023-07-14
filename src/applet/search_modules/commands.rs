@@ -88,7 +88,7 @@ impl SearchModule for Commands {
     async fn search(&self, query: String, max_results: u32) -> Vec<SearchResult> {
         string_search(&query, &self.apps, max_results, Box::new(id_hash), true)
             .into_iter()
-            .map(|(s, r)| self.create_result(s, r))
+            .map(|(s, r)| self.create_result(s, r + 0.3))
             .collect()
     }
 }

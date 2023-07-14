@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use execute::Execute;
-use prober::indexing::Index;
+use prober::indexing::{tokenize_string, Index};
 
-use crate::{result_templates::standard_entry, search::string_search, utils::simple_hash, icon};
+use crate::{icon, result_templates::standard_entry, search::string_search, utils::simple_hash};
 
 use super::{SearchModule, SearchResult};
 
@@ -21,44 +21,41 @@ impl SearchModule for Files {
         if let Some(index) = &self.index {
             let query = query.to_lowercase();
 
-            let mut files = string_search(
-                &query,
-                &index.files,
-                max_results,
-                Box::new(id_hash),
-                false,
-            )
-            .into_iter()
-            .map(|(s, r)| self.create_result(s, r, FileType::File))
-            .collect::<Vec<SearchResult>>();
+            let mut files =
+                string_search(&query, &index.files, max_results, Box::new(id_hash), false)
+                    .into_iter()
+                    .map(|(s, r)| self.create_result(s, r, FileType::File))
+                    .collect::<Vec<SearchResult>>();
 
-            let mut dirs = string_search(
-                &query,
-                &index.dirs,
-                max_results,
-                Box::new(id_hash),
-                false,
-            )
-            .into_iter()
-            .map(|(s, r)| self.create_result(s, r, FileType::Dir))
-            .collect::<Vec<SearchResult>>();
+            let mut dirs =
+                string_search(&query, &index.dirs, max_results, Box::new(id_hash), false)
+                    .into_iter()
+                    .map(|(s, r)| self.create_result(s, r, FileType::Dir))
+                    .collect::<Vec<SearchResult>>();
 
-            // TODO: tokenize
-            let mut file_contents_matches = index
-                .tf_idf
-                .get(&query)
-                .unwrap_or(&vec![])
+            let tokens = tokenize_string(&query);
+
+            let mut file_contents_matches = tokens
                 .into_iter()
-                .map(|(s, relevance)| {
-                    let s = s.to_str().unwrap().to_string();
+                .map(|token| {
+                    index
+                        .tf_idf
+                        .get(&token)
+                        .unwrap_or(&vec![])
+                        .into_iter()
+                        .map(|(s, relevance)| {
+                            let s = s.to_str().unwrap().to_string();
 
-                    let mut relevance = *relevance;
-                    if relevance > 3.0 {
-                        relevance = 3.0;
-                    }
+                            let mut relevance = *relevance;
+                            if relevance > 3.0 {
+                                relevance = 3.0;
+                            }
 
-                    self.create_result(s, relevance, FileType::File)
+                            self.create_result(s, relevance, FileType::File)
+                        })
+                        .collect::<Vec<SearchResult>>()
                 })
+                .flatten()
                 .collect::<Vec<SearchResult>>();
 
             files.append(&mut dirs);
@@ -84,9 +81,7 @@ impl Files {
                     let ext = name.split('.').last().unwrap_or("");
                     find_file_icon_name(ext)
                 }
-                FileType::Dir => {
-                    find_folder_icon_name(&name)
-                }
+                FileType::Dir => find_folder_icon_name(&name),
             };
 
             let icon = icon::from_gtk(icon_name);
@@ -137,7 +132,8 @@ fn find_file_icon_name(ext: &str) -> &str {
         "md" => "text-x-markdown",
         "exe" => "application-x-executable",
         "deb" | "rpm" => "package-x-generic",
-        _  => "text-x-generic",
+        "tex" => "text-x-tex",
+        _ => "text-x-generic",
     }
 }
 
@@ -166,8 +162,6 @@ impl Files {
     pub fn new() -> Files {
         let index = Index::load("index");
 
-        Files {
-            index,
-        }
+        Files { index }
     }
 }

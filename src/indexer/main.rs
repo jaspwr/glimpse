@@ -5,7 +5,7 @@ use std::{
     path::PathBuf,
 };
 
-use prober::indexing::Index;
+use prober::indexing::{Index, tokenize_file};
 
 fn main() {
     reindex();
@@ -16,12 +16,14 @@ fn reindex() {
     let mut files: Vec<PathBuf> = vec![];
     let mut dirs: Vec<PathBuf> = vec![];
 
+    // TODO: Make this configurable
     let ignore_dirs = vec![
         "target",
         "node_modules",
         "zig-cache",
         "zig-out",
         "_prefix32_wine",
+        "x86_64-pc-linux-gnu-library"
     ];
 
     let _ = index_dir(&path, &false, &mut files, &mut dirs, &ignore_dirs);
@@ -207,56 +209,4 @@ fn term_frequency(tokens: Vec<String>) -> TokenFrequency {
     // }
 
     t
-}
-
-fn tokenize_file(path: &PathBuf) -> Option<Vec<String>> {
-    let mut tokens = vec![];
-    let file = std::fs::File::open(path).unwrap();
-    let file = BufReader::new(file);
-
-    const WORD_BUF_SIZE: usize = 100;
-
-    let mut word_buf: [char; WORD_BUF_SIZE] = ['\0'; WORD_BUF_SIZE];
-    let mut word_buf_index = 0;
-
-    let mut pre_is_alpha = false;
-
-    for line in file.lines() {
-        let line = match line {
-            Ok(line) => line,
-            Err(_) => return None,
-        };
-        for c in line.chars() {
-            let is_alphanum = c.is_alphanumeric();
-
-            if is_alphanum != pre_is_alpha || word_buf_index == WORD_BUF_SIZE {
-                if pre_is_alpha {
-                    append_word(&word_buf, word_buf_index, &mut tokens);
-                }
-
-                word_buf_index = 0;
-            }
-
-            word_buf[word_buf_index] = c;
-            word_buf_index += 1;
-
-            pre_is_alpha = is_alphanum;
-        }
-
-        if pre_is_alpha {
-            append_word(&word_buf, word_buf_index, &mut tokens);
-        }
-    }
-    Some(tokens)
-}
-
-#[inline]
-fn append_word(word_buf: &[char; 100], word_buf_index: usize, tokens: &mut Vec<String>) {
-    let token = word_buf
-        .iter()
-        .take(word_buf_index)
-        .collect::<String>()
-        .to_lowercase();
-
-    tokens.push(token);
 }

@@ -1,11 +1,14 @@
 use gtk::traits::{GridExt, ContainerExt, WidgetExt, LabelExt};
 
+use crate::prelude::*;
+
 pub fn standard_entry(
     name: String,
     icon: Option<gtk::Image>,
     description: Option<String>,
 ) -> gtk::Box {
     let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    let name = name.trunc(40);
     let label = gtk::Label::with_mnemonic(&name);
     label.set_halign(gtk::Align::Start);
 
@@ -15,11 +18,7 @@ pub fn standard_entry(
     text_container.add(&label);
 
     if let Some(description) = description {
-        let mut description = description;
-        if description.len() > 40 {
-            description.truncate(40);
-            description.push_str("…");
-        }
+        let description = description.trunc(40);
         let description_label = gtk::Label::with_mnemonic(&description);
         description_label.set_halign(gtk::Align::Start);
         description_label.set_opacity(0.6);

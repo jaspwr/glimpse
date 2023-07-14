@@ -26,6 +26,7 @@ mod commands;
 mod dictionary;
 mod steam_games;
 mod files;
+mod calculator;
 
 pub fn load_standard_modules() -> Vec<BoxedSearchModule> {
     let mut ret = Vec::<BoxedSearchModule>::new();
@@ -44,6 +45,8 @@ pub fn load_standard_modules() -> Vec<BoxedSearchModule> {
 
     //TODO conf
     ret.push(Box::new(files::Files::new()));
+
+    ret.push(Box::new(calculator::Calculator::new()));
 
     ret
 }

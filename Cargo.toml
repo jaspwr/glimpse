@@ -4,11 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "applet"
+name = "prober"
 path = "src/applet/main.rs"
 
 [[bin]]
-name = "indexer"
+name = "prober-indexer"
 path = "src/indexer/main.rs"
 
 [dependencies]
@@ -16,6 +16,7 @@ async-trait = "0.1.71"
 execute = "0.2.12"
 futures = "0.3.28"
 gdk = "0.17.1"
+gdk-sys = "0.17.0"
 gtk = "0.17.1"
 home = "0.5.5"
 http = "0.2.9"

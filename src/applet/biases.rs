@@ -46,8 +46,8 @@ pub fn increment_bias(id: u64, amount: f32) {
 
     bias += amount;
 
-    if bias > 0.6 {
-        bias = 0.6;
+    if bias > 2.0 {
+        bias = 2.0;
     }
 
     biases.map.insert(id, bias);
