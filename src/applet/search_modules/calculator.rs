@@ -16,7 +16,7 @@ impl SearchModule for Calculator {
     async fn search(&self, query: String, _: u32) -> Vec<SearchResult> {
         #[rustfmt::skip]
         let solution = tokenize(&query)
-            // .bind(swap_words)
+            .bind(swap_words)
             .bind(execute)
             .bind(fmt_number);
 
@@ -38,7 +38,7 @@ impl SearchModule for Calculator {
 fn render(solution: String) -> gtk::Box {
     let word_attributes = pango::AttrList::new();
     let mut word_desc = pango::FontDescription::from_string("24");
-    word_desc.set_family("Times New Roman");
+    // word_desc.set_family("Times New Roman");
     let word_size_attrib = pango::AttrFontDesc::new(&word_desc);
     word_attributes.insert(word_size_attrib);
 
@@ -56,7 +56,7 @@ fn render(solution: String) -> gtk::Box {
 
 fn fmt_number(n: f64) -> Option<String> {
     if n.is_nan() {
-        None
+        Some("Math error".to_string())
     } else if n.is_infinite() {
         if n.is_sign_positive() {
             Some("∞".to_string())
@@ -75,7 +75,6 @@ enum Token {
     Operator(char),
     Paren(char),
     Word(String),
-    Constant(f32),
     Function(String),
 }
 
@@ -89,7 +88,7 @@ enum CharCategory {
 }
 
 fn catergorise_char(c: &char) -> CharCategory {
-    if c.is_numeric() {
+    if c.is_numeric() || *c == '.' {
         CharCategory::Numeral
     } else if *c == '+' || *c == '-' || *c == '*' || *c == '/' || *c == '^' {
         CharCategory::Operator
@@ -163,10 +162,28 @@ fn swap_words(tokens: Vec<Token>) -> Option<Vec<Token>> {
     for t in tokens {
         if let Token::Word(s) = t {
             let s = s.to_lowercase();
+
+            const FUNCTIONS: [&str; 10] = [
+                "sqrt", "sin", "cos", "tan", "asin", "acos", "atan", "ln", "log", "exp",
+            ];
+
             if s == "plus" {
                 ret.push(Token::Operator('+'));
+            } else if s == "times" {
+                ret.push(Token::Operator('*'));
+            } else if s == "div" {
+                ret.push(Token::Operator('/'));
+            } else if s == "minus" {
+                ret.push(Token::Operator('-'));
+            } else if s == "pi" {
+                ret.push(Token::Number(std::f64::consts::PI));
+            } else if s == "e" {
+                ret.push(Token::Number(std::f64::consts::E));
+            } else if FUNCTIONS.contains(&s.as_str()) {
+                ret.push(Token::Function(s));
+            } else {
+                return None;
             }
-            return None;
         } else {
             ret.push(t);
         }
@@ -199,7 +216,6 @@ fn try_consume(ts: &Tokens, matching: Token) -> Option<Tokens> {
 }
 
 // TODO: Unary minus and plus
-
 #[rustfmt::skip]
 fn add(ts: Tokens) -> Option<(Tokens, f64)> {
     sub(ts)
@@ -287,7 +303,7 @@ fn div_prime(ts: Tokens) -> Option<(Tokens, f64)> {
 
 #[rustfmt::skip]
 fn pow(ts: Tokens) -> Option<(Tokens, f64)> {
-    brack(ts)
+    call(ts)
     .bind(|(ts, left)|
         pow_prime(ts)
         .bind(|(ts, right)|
@@ -297,12 +313,28 @@ fn pow(ts: Tokens) -> Option<(Tokens, f64)> {
 #[rustfmt::skip]
 fn pow_prime(ts: Tokens) -> Option<(Tokens, f64)> {
     match try_consume(&ts, Token::Operator('^')) {
-        Some(ts) => brack(ts)
+        Some(ts) => call(ts)
             .bind(|(ts, left)|
                 pow_prime(ts)
                 .bind(|(ts, right)|
                     Some((ts, left.powf(right))))),
         None => Some((ts, 1.0))
+    }
+}
+
+#[rustfmt::skip]
+fn call(ts: Tokens) -> Option<(Tokens, f64)> {
+    let first_token = ts.iter().next()?;
+    if let Token::Function(name) = first_token {
+        let ts = ts[1..].to_vec();
+        let (ts, n) = brack(ts)?;
+        if let Some(n) = run_fn(&name, n) {
+            Some((ts, n))
+        } else {
+            None
+        }
+    } else {
+        brack(ts)
     }
 }
 
@@ -324,6 +356,22 @@ fn literal(ts: Tokens) -> Option<(Tokens, f64)> {
         Some((ts[1..].to_vec(), *n))
     } else {
         None
+    }
+}
+
+fn run_fn(name: &str, n: f64) -> Option<f64> {
+    match name {
+        "sqrt" => Some(n.sqrt()),
+        "sin" => Some(n.sin()),
+        "cos" => Some(n.cos()),
+        "tan" => Some(n.tan()),
+        "asin" => Some(n.asin()),
+        "acos" => Some(n.acos()),
+        "atan" => Some(n.atan()),
+        "ln" => Some(n.ln()),
+        "log" => Some(n.log10()),
+        "exp" => Some(n.exp()),
+        _ => None,
     }
 }
 

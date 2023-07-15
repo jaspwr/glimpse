@@ -1,6 +1,3 @@
-use std::io::Read;
-
-use bytes::Bytes;
 use gdk::gdk_pixbuf;
 use gtk::traits::IconThemeExt;
 use pango::glib;

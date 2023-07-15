@@ -1,7 +1,8 @@
 use std::{
     collections::HashMap,
+    fs::File,
     io::{BufRead, BufReader},
-    path::PathBuf, fs::File,
+    path::PathBuf,
 };
 
 use docx_rs::*;
@@ -87,19 +88,7 @@ fn get_doc_text(doc: Vec<DocumentChild>) -> String {
         match child {
             DocumentChild::Paragraph(paragraph) => {
                 for child in paragraph.children {
-                    match child {
-                        ParagraphChild::Run(run) => {
-                            for child in run.children {
-                                match child {
-                                    RunChild::Text(text) => {
-                                        ret += format!("{}", text.text).as_str();
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
+                    handle_paragraph_child(child, &mut ret);
                 }
             }
             _ => {}
@@ -108,6 +97,27 @@ fn get_doc_text(doc: Vec<DocumentChild>) -> String {
     ret
 }
 
+#[inline]
+fn handle_paragraph_child(child: ParagraphChild, ret: &mut String) {
+    match child {
+        ParagraphChild::Run(run) => {
+            handle_run(run, ret);
+        }
+        _ => {}
+    }
+}
+
+#[inline]
+fn handle_run(run: Box<Run>, ret: &mut String) {
+    for child in run.children {
+        match child {
+            RunChild::Text(text) => {
+                *ret += format!("{}", text.text).as_str();
+            }
+            _ => {}
+        }
+    }
+}
 
 enum FileType {
     Unknown,
@@ -119,13 +129,10 @@ pub fn tokenize_file(path: &PathBuf) -> Option<Vec<String>> {
     let mut file_type = match infer::get_from_path(path).ok()? {
         Some(type_) => match type_.mime_type() {
             "application/pdf" => FileType::Pdf,
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document" | "application/word" =>
-                FileType::Docx,
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            | "application/word" => FileType::Docx,
 
-            _ => {
-                FileType::Unknown
-            }
-
+            _ => FileType::Unknown,
         },
         None => FileType::Unknown,
     };

@@ -5,7 +5,7 @@ use execute::Execute;
 use prober::{indexing::{tokenize_string, Index}, config::CONF};
 
 use crate::{
-    icon, result_templates::standard_entry, search::string_search, utils::simple_hash, BoxedRuntime, exec::xdg_open,
+    icon, result_templates::standard_entry, search::string_search, utils::simple_hash, BoxedRuntime, exec::{xdg_open, execute_detached},
 };
 
 use super::{SearchModule, SearchResult};
@@ -97,18 +97,27 @@ impl Files {
 
             let icon = icon::from_gtk(icon_name);
 
-            let desc = if CONF.misc.display_file_and_directory_paths {
+            let mut desc = if CONF.misc.display_file_and_directory_paths {
                 Some(name_cpy.clone())
             } else {
                 None
             };
+
+            if CONF.misc.run_exes_with_wine && is_windows_application(&name_cpy) {
+                desc = Some("Run with wine".to_string());
+            }
 
             standard_entry(name, icon, desc)
         };
 
         let name_cpy = name.clone();
         let on_select = move || {
-           let _ = xdg_open(&name_cpy);
+            if CONF.misc.run_exes_with_wine && is_windows_application(&name_cpy) {
+                let cmd = format!("wine \"{}\"", name_cpy);
+                let _ = execute_detached(cmd);
+            } else {
+                let _ = xdg_open(&name_cpy);
+            }
         };
 
         SearchResult {
@@ -127,6 +136,13 @@ fn clamp_relevance(relevance: &f32) -> f32 {
         relevance = 3.0;
     }
     relevance
+}
+
+fn is_windows_application(path: &String) -> bool {
+    let path = PathBuf::from(path);
+    let ext = path.extension().unwrap_or_default().to_str().unwrap_or_default();
+
+    ext == "exe"
 }
 
 fn find_file_icon_name(ext: &str) -> &str {

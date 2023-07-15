@@ -1,4 +1,7 @@
-use std::io::{BufRead, BufReader};
+use std::{
+    io::{BufRead, BufReader},
+    path::PathBuf,
+};
 
 use pango::glib::once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -17,6 +20,9 @@ pub struct Config {
     pub indexing: Indexing,
     pub modules: Modules,
     pub use_web_modules: bool,
+    pub search_paths: Vec<PathBuf>,
+    pub search_hidden_folders: bool,
+    pub ignore_directories: Vec<String>,
     pub visual: Visual,
     pub window: Window,
     pub misc: Misc,
@@ -39,6 +45,7 @@ pub struct Misc {
     pub display_command_paths: bool,
     pub display_file_and_directory_paths: bool,
     pub preferred_terminal: String,
+    pub run_exes_with_wine: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -68,7 +75,7 @@ pub struct Indexing {
     pub size_upper_bound_GiB: f32,
 }
 
-pub fn load_config() -> Result<Config, Box::<dyn std::error::Error>> {
+pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
     if let Some(home) = home::home_dir() {
         let config_path = home.join(".config").join("prober").join("config.toml");
         if let Ok(file) = std::fs::File::open(config_path.clone()) {
@@ -82,16 +89,16 @@ pub fn load_config() -> Result<Config, Box::<dyn std::error::Error>> {
         } else {
             let mut default_config = Config::default();
 
-            let indexing_location = home
-                .join(".cache")
-                .join("prober");
+            let indexing_location = home.join(".cache").join("prober");
             let indexing_location = indexing_location.to_str();
             default_config.indexing.location = match indexing_location {
                 Some(location) => String::from(location),
-                None => return Err(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    "Error loading config.",
-                )))
+                None => {
+                    return Err(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::NotFound,
+                        "Error loading config.",
+                    )))
+                }
             };
 
             let toml = toml::to_string(&default_config)?;
@@ -109,6 +116,17 @@ pub fn load_config() -> Result<Config, Box::<dyn std::error::Error>> {
 
 impl Default for Config {
     fn default() -> Self {
+        let ignore_dirs = vec![
+            "node_modules".to_string(),
+            "zig-cache".to_string(),
+            "zig-out".to_string(),
+            "_prefix32_wine".to_string(),
+            "texmf".to_string(),
+            "VirtualBox VMs".to_string(),
+            "x86_64-pc-linux-gnu-library".to_string(),
+            "x86_64-unknown-linux-gnu-library".to_string(),
+        ];
+
         Config {
             max_results: 25,
             indexing: Indexing {
@@ -129,6 +147,9 @@ impl Default for Config {
                 },
             },
             use_web_modules: false,
+            search_paths: vec![home::home_dir().unwrap_or(PathBuf::from("/home"))],
+            search_hidden_folders: false,
+            ignore_directories: ignore_dirs,
             visual: Visual {
                 show_icons: true,
                 icon_size: 32,
@@ -143,6 +164,7 @@ impl Default for Config {
                 display_command_paths: false,
                 display_file_and_directory_paths: true,
                 preferred_terminal: String::from("xterm"),
+                run_exes_with_wine: true,
             },
         }
     }

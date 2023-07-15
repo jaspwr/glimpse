@@ -1,27 +1,27 @@
 use std::{collections::HashMap, fs::DirEntry, path::PathBuf};
 
-use prober::indexing::{tokenize_file, Index};
+use prober::{
+    config::CONF,
+    indexing::{tokenize_file, Index},
+};
 
 fn main() {
     reindex();
 }
 
 fn reindex() {
-    let path = PathBuf::from("/home/jasper");
     let mut files: Vec<PathBuf> = vec![];
     let mut dirs: Vec<PathBuf> = vec![];
 
-    // TODO: Make this configurable
-    let ignore_dirs = vec![
-        "target",
-        "node_modules",
-        "zig-cache",
-        "zig-out",
-        "_prefix32_wine",
-        "x86_64-pc-linux-gnu-library",
-    ];
-
-    let _ = index_dir(&path, &false, &mut files, &mut dirs, &ignore_dirs);
+    for path in &CONF.search_paths {
+        let _ = index_dir(
+            &path,
+            &CONF.search_hidden_folders,
+            &mut files,
+            &mut dirs,
+            &CONF.ignore_directories,
+        );
+    }
 
     let tf_idf = create_token_to_document_map(&files);
 
@@ -53,9 +53,9 @@ fn index_dir(
     index_hidden: &bool,
     files: &mut Vec<PathBuf>,
     dirs: &mut Vec<PathBuf>,
-    ignore_dirs: &Vec<&str>,
+    ignore_dirs: &Vec<String>,
 ) -> Result<(), std::io::Error> {
-    if ignore_dirs.contains(&path.file_name().unwrap().to_str().unwrap()) {
+    if ignore_dirs.contains(&path.file_name().unwrap().to_str().unwrap().to_string()) {
         return Ok(());
     }
 
@@ -75,7 +75,7 @@ fn handle_dir_entry(
     index_hidden: &bool,
     files: &mut Vec<PathBuf>,
     dirs: &mut Vec<PathBuf>,
-    ignore_dirs: &Vec<&str>,
+    ignore_dirs: &Vec<String>,
 ) -> Result<(), std::io::Error> {
     let entry = entry?;
 

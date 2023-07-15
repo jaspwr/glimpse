@@ -1,16 +1,13 @@
-use std::{
-    marker::PhantomData,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
-    },
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
 };
 
 use biases::increment_bias;
 use futures::{future::abortable, stream::AbortHandle};
 use gdk::glib::once_cell::sync::Lazy;
 use gdk::{glib::idle_add_once, SeatCapabilities};
-use gtk::{prelude::*, Adjustment, Scrollable, subclass::scrolled_window};
+use gtk::prelude::*;
 
 mod biases;
 mod exec;
@@ -75,10 +72,7 @@ fn main() {
             Option::<&gtk::Adjustment>::None,
         );
 
-        scrolled_window.set_policy(
-            gtk::PolicyType::External,
-            gtk::PolicyType::Automatic,
-        );
+        scrolled_window.set_policy(gtk::PolicyType::External, gtk::PolicyType::Automatic);
 
         scrolled_window.set_size_request(width, height - 30);
 
@@ -90,17 +84,27 @@ fn main() {
             let style_provider = gtk::CssProvider::new();
 
             if CONF.visual.dark_result_borders {
-                let _ = style_provider.load_from_data("
+                let _ = style_provider
+                    .load_from_data(
+                        "
                     .outlined-container {
                         border-bottom: 1px solid rgba(0,0,0,.1);
                     }
-                ".as_bytes()).unwrap();
+                "
+                        .as_bytes(),
+                    )
+                    .unwrap();
             } else {
-                let _ = style_provider.load_from_data("
+                let _ = style_provider
+                    .load_from_data(
+                        "
                     .outlined-container {
                         border-bottom: 1px solid rgba(255,255,255,.1);
                     }
-                ".as_bytes()).unwrap();
+                "
+                        .as_bytes(),
+                    )
+                    .unwrap();
             }
 
             let screen = gdk::Screen::default().unwrap();
@@ -439,7 +443,6 @@ pub async fn append_results(results: Vec<SearchResult>, list: Arc<std::sync::Mut
             };
 
             let entry = (result.render)();
-
 
             list.list.insert(&entry, index);
             let row = list.list.row_at_index(index).unwrap();
