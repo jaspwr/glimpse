@@ -1,6 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use async_trait::async_trait;
+use sqlite::State;
 
 use crate::{
     exec::xdg_open, icon, result_templates::standard_entry, search::string_search,
@@ -39,8 +40,6 @@ impl SearchModule for WebBookmarks {
     }
 }
 
-
-
 fn id_hash(name: &String) -> u64 {
     (simple_hash(name) >> 3) + 0x123809abedf
 }
@@ -53,25 +52,30 @@ impl WebBookmarks {
         rt.lock().unwrap().spawn(async move {
             let data = data_cpy;
             let mut list = data.lock().await;
-            let bookmarks = get_chromium_bookmarks();
+            let mut bookmarks = vec![];
 
-            if let Some(bookmarks) = bookmarks {
-                let mut titles = vec![];
-                let mut url_map = HashMap::new();
+            bookmarks.append(&mut get_chromium_bookmarks());
+            bookmarks.append(&mut get_firefox_bookmarks());
 
-                for bookmark in bookmarks {
-                    titles.push(bookmark.title.clone());
-                    url_map.insert(bookmark.title, bookmark.url);
-                }
+            let mut titles = vec![];
+            let mut url_map = HashMap::new();
 
-                *list = Some(BookMarksData { titles, url_map });
+            for bookmark in bookmarks {
+                titles.push(bookmark.title.clone());
+                url_map.insert(bookmark.title, bookmark.url);
             }
+
+            *list = Some(BookMarksData { titles, url_map });
         });
 
         WebBookmarks { data }
     }
 
-    fn create_result(name: &String, relevance: f32, url_map: &HashMap<String, String>) -> SearchResult {
+    fn create_result(
+        name: &String,
+        relevance: f32,
+        url_map: &HashMap<String, String>,
+    ) -> SearchResult {
         // let icon = fetch_favicon(&list.url_map.get(&name).unwrap()).await;
 
         let name_cpy = name.clone();
@@ -89,13 +93,21 @@ impl WebBookmarks {
         SearchResult {
             render: Box::new(render),
             relevance,
-            id: id_hash(&name),
+            id: id_hash(name),
             on_select: Some(Box::new(on_select)),
         }
     }
 }
 
-fn get_chromium_bookmarks() -> Option<Vec<BookmarkEntry>> {
+fn get_chromium_bookmarks() -> Vec<BookmarkEntry> {
+    if let Some(bookmarks) = __get_chromium_bookmarks() {
+        bookmarks
+    } else {
+        vec![]
+    }
+}
+
+fn __get_chromium_bookmarks() -> Option<Vec<BookmarkEntry>> {
     let home = home::home_dir()?;
 
     let search_locations = vec![
@@ -167,12 +179,12 @@ fn try_create_child(child: &serde_json::Value) -> Option<BookmarkEntry> {
     Some(BookmarkEntry { title, url })
 }
 
-struct SafeImage {
-    image: Option<gtk::Image>,
-}
+// struct SafeImage {
+//     image: Option<gtk::Image>,
+// }
 
-unsafe impl Send for SafeImage {}
-unsafe impl Sync for SafeImage {}
+// unsafe impl Send for SafeImage {}
+// unsafe impl Sync for SafeImage {}
 
 // async fn fetch_favicon(url: &String) -> SafeImage {
 //     if !CONF.use_web_modules {
@@ -198,3 +210,49 @@ unsafe impl Sync for SafeImage {}
 
 //     reqwest::get(url).await.ok()?.bytes().await.ok().into_iter().collect::Vec<u8>>()
 // }
+
+fn get_firefox_bookmarks() -> Vec<BookmarkEntry> {
+    let home = home::home_dir().unwrap();
+    let firefox_path = home.join(".mozilla").join("firefox");
+    let dir = std::fs::read_dir(firefox_path).unwrap();
+
+    dir.into_iter()
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.file_type().unwrap().is_dir())
+        .map(|entry| entry.path().join("places.sqlite"))
+        .filter(|path| path.exists())
+        .filter_map(|path| query_firefox_db(path).ok())
+        .flatten()
+        .collect()
+}
+
+fn query_firefox_db(db_path: PathBuf) -> Result<Vec<BookmarkEntry>, Box<dyn std::error::Error>> {
+    let mut ret = vec![];
+
+    let connection = sqlite::open(db_path)?;
+
+    let query = "SELECT title, fk FROM moz_bookmarks;";
+
+    let mut statement = connection.prepare(query)?;
+
+    while let Ok(State::Row) = statement.next() {
+        let title = statement.read::<String, _>("title")?;
+        let fk = statement.read::<i64, _>("fk")?;
+        let mut url = String::new();
+
+        if fk == 0 {
+            continue;
+        }
+
+        let query = "SELECT url FROM moz_places WHERE id = ?";
+        let mut statement = connection.prepare(query)?;
+        statement.bind((1, fk))?;
+
+        while let Ok(State::Row) = statement.next() {
+            url = statement.read::<String, _>("url")?;
+        }
+
+        ret.push(BookmarkEntry { title, url });
+    }
+    Ok(ret)
+}

@@ -8,7 +8,10 @@ use async_trait::async_trait;
 use execute::Execute;
 use prober::config::CONF;
 
-use crate::{icon, result_templates::standard_entry, search::string_search, utils, BoxedRuntime, exec::execute_detached};
+use crate::{
+    exec::execute_detached, icon, result_templates::standard_entry, search::string_search, utils,
+    BoxedRuntime,
+};
 
 use super::{SearchModule, SearchResult};
 

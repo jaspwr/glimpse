@@ -84,27 +84,17 @@ fn main() {
             let style_provider = gtk::CssProvider::new();
 
             if CONF.visual.dark_result_borders {
-                let _ = style_provider
-                    .load_from_data(
-                        "
-                    .outlined-container {
+                #[rustfmt::skip]
+                style_provider.load_from_data(
+                    ".outlined-container {
                         border-bottom: 1px solid rgba(0,0,0,.1);
-                    }
-                "
-                        .as_bytes(),
-                    )
-                    .unwrap();
+                    }".as_bytes(),).unwrap();
             } else {
-                let _ = style_provider
-                    .load_from_data(
-                        "
-                    .outlined-container {
+                #[rustfmt::skip]
+                style_provider.load_from_data(
+                    ".outlined-container {
                         border-bottom: 1px solid rgba(255,255,255,.1);
-                    }
-                "
-                        .as_bytes(),
-                    )
-                    .unwrap();
+                    }".as_bytes(),).unwrap();
             }
 
             let screen = gdk::Screen::default().unwrap();
@@ -148,7 +138,7 @@ fn main() {
             let rt = rt_cpy.clone();
             let query = entry.text().to_string();
 
-            perform_search(query, list, current_task_handle.clone(), rt);
+            perform_search(query, list, current_task_handle, rt);
         });
 
         let list_cpy = list.clone();
@@ -158,7 +148,7 @@ fn main() {
 
             handle_search_field_keypress(key, list);
 
-            return Inhibit(false);
+            Inhibit(false)
         });
 
         search_field.connect_key_release_event(|_, keyevent| {
@@ -179,18 +169,16 @@ fn main() {
 
         let search_field = Arc::new(search_field);
 
-        let search_field_cpy = search_field.clone();
-
         list.lock()
             .unwrap()
             .list
             .connect_key_press_event(move |list, key_event| -> Inhibit {
                 let key = key_event.keyval();
-                let search_field = search_field_cpy.clone();
+                let search_field = search_field.clone();
 
                 handle_list_keypress(key, search_field, list);
 
-                return Inhibit(false);
+                Inhibit(false)
             });
 
         list.lock()
@@ -215,12 +203,7 @@ fn main() {
 
         window.activate();
 
-        perform_search(
-            "".to_string(),
-            list.clone(),
-            current_task_handle.clone(),
-            rt.clone(),
-        );
+        perform_search("".to_string(), list, current_task_handle, rt);
     });
 
     application.run();
@@ -270,7 +253,7 @@ fn get_entry_id(widget: &gtk::Widget) -> u64 {
             let data_ptr = Box::into_raw(data);
             widget.set_data("dat", data_ptr);
 
-            return id;
+            id
         } else {
             0
         }
@@ -502,6 +485,7 @@ fn find_slot(relevance: f32, id: u64, list: &SafeListBox) -> Option<i32> {
     let len = children.len();
 
     let mut index = 0;
+    #[allow(clippy::explicit_counter_loop)]
     for child in children {
         let child_relevance = get_entry_relevance(child);
         if child_relevance < relevance {

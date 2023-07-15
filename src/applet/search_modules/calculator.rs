@@ -37,8 +37,7 @@ impl SearchModule for Calculator {
 
 fn render(solution: String) -> gtk::Box {
     let word_attributes = pango::AttrList::new();
-    let mut word_desc = pango::FontDescription::from_string("24");
-    // word_desc.set_family("Times New Roman");
+    let word_desc = pango::FontDescription::from_string("24");
     let word_size_attrib = pango::AttrFontDesc::new(&word_desc);
     word_attributes.insert(word_size_attrib);
 

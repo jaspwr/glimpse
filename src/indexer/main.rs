@@ -1,8 +1,11 @@
 use std::{collections::HashMap, fs::DirEntry, path::PathBuf};
 
+use docx_rs::*;
+use lopdf::Document;
+
 use prober::{
     config::CONF,
-    indexing::{tokenize_file, Index},
+    indexing::{tokenize_string, Index},
 };
 
 fn main() {
@@ -198,4 +201,106 @@ fn term_frequency(tokens: Vec<String>) -> TokenFrequency {
     // }
 
     t
+}
+
+fn load_as_pdf(path: &PathBuf) -> Option<String> {
+    let doc = Document::load(path).ok()?;
+    let pages = doc.get_pages();
+
+    let mut pages = pages.len() as u32;
+
+    if pages == 0 {
+        return None;
+    }
+
+    const MAX_PAGES: u32 = 50;
+    if pages > MAX_PAGES {
+        pages = MAX_PAGES;
+    }
+
+    let range = (1..=pages).collect::<Vec<u32>>();
+    let text = doc.extract_text(&range).ok()?;
+
+    Some(text)
+}
+
+fn load_docx(path: &PathBuf) -> Option<String> {
+    let bytes = std::fs::read(path).unwrap();
+
+    let doc = docx_rs::read_docx(&bytes).ok()?.document;
+    let contents = get_doc_text(doc.children);
+
+    Some(contents)
+}
+
+fn get_doc_text(doc: Vec<DocumentChild>) -> String {
+    // This just has to be like this...
+    // This crate isn't really meant to be used like this I think.
+    let mut ret = String::new();
+    for child in doc {
+        match child {
+            DocumentChild::Paragraph(paragraph) => {
+                for child in paragraph.children {
+                    handle_paragraph_child(child, &mut ret);
+                }
+            }
+            _ => {}
+        }
+    }
+    ret
+}
+
+#[inline]
+fn handle_paragraph_child(child: ParagraphChild, ret: &mut String) {
+    match child {
+        ParagraphChild::Run(run) => {
+            handle_run(run, ret);
+        }
+        _ => {}
+    }
+}
+
+#[inline]
+fn handle_run(run: Box<Run>, ret: &mut String) {
+    for child in run.children {
+        match child {
+            RunChild::Text(text) => {
+                *ret += format!("{}", text.text).as_str();
+            }
+            _ => {}
+        }
+    }
+}
+
+enum FileType {
+    Unknown,
+    Pdf,
+    Docx,
+}
+
+pub fn tokenize_file(path: &PathBuf) -> Option<Vec<String>> {
+    let mut file_type = match infer::get_from_path(path).ok()? {
+        Some(type_) => match type_.mime_type() {
+            "application/pdf" => FileType::Pdf,
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            | "application/word" => FileType::Docx,
+
+            _ => FileType::Unknown,
+        },
+        None => FileType::Unknown,
+    };
+
+    if let Some(ext) = path.extension() {
+        if ext == "docx" {
+            file_type = FileType::Docx;
+        }
+    }
+
+    let file = match file_type {
+        FileType::Pdf => load_as_pdf(path)?,
+        FileType::Docx => load_docx(path)?,
+        _ => std::fs::read_to_string(path).ok()?,
+    };
+
+    Some(tokenize_string(&file))
 }

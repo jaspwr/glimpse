@@ -1,11 +1,18 @@
-use std::{sync::Arc, path::PathBuf};
+use std::{path::PathBuf, sync::Arc};
 
 use async_trait::async_trait;
-use execute::Execute;
-use prober::{indexing::{tokenize_string, Index}, config::CONF};
+use prober::{
+    config::CONF,
+    indexing::{tokenize_string, Index},
+};
 
 use crate::{
-    icon, result_templates::standard_entry, search::string_search, utils::simple_hash, BoxedRuntime, exec::{xdg_open, execute_detached},
+    exec::{execute_detached, xdg_open},
+    icon,
+    result_templates::standard_entry,
+    search::string_search,
+    utils::simple_hash,
+    BoxedRuntime,
 };
 
 use super::{SearchModule, SearchResult};
@@ -113,6 +120,10 @@ impl Files {
         let name_cpy = name.clone();
         let on_select = move || {
             if CONF.misc.run_exes_with_wine && is_windows_application(&name_cpy) {
+                if let Some(dir) = PathBuf::from(&name_cpy).parent() {
+                    let _ = std::env::set_current_dir(dir);
+                }
+
                 let cmd = format!("wine \"{}\"", name_cpy);
                 let _ = execute_detached(cmd);
             } else {
@@ -140,7 +151,11 @@ fn clamp_relevance(relevance: &f32) -> f32 {
 
 fn is_windows_application(path: &String) -> bool {
     let path = PathBuf::from(path);
-    let ext = path.extension().unwrap_or_default().to_str().unwrap_or_default();
+    let ext = path
+        .extension()
+        .unwrap_or_default()
+        .to_str()
+        .unwrap_or_default();
 
     ext == "exe"
 }
