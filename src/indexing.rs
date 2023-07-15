@@ -30,7 +30,7 @@ impl Index {
     pub fn save(&self, name: &str) {
         let path = PATH.join(name).with_extension("bin");
         let mut file = std::fs::File::create(path).unwrap();
-        savefile::save(&mut file, 0, self).unwrap();
+        savefile::save_compressed(&mut file, 0, self).unwrap();
     }
 
     pub async fn load(name: &str) -> Option<Index> {

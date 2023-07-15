@@ -6,13 +6,14 @@ use serde::{Deserialize, Serialize};
 pub static CONF: Lazy<Config> = Lazy::new(|| match load_config() {
     Ok(config) => config,
     Err(_) => {
-        println!("Failed to load config");
+        println!("Failed to load config. Using default.");
         Config::default()
     }
 });
 
 #[derive(Serialize, Deserialize)]
 pub struct Config {
+    pub max_results: usize,
     pub indexing: Indexing,
     pub modules: Modules,
     pub use_web_modules: bool,
@@ -27,20 +28,21 @@ pub struct Modules {
     pub file_contents: bool,
     pub pdf_contents: bool,
     pub steam_games: bool,
-    pub web_modules: WebModules,
+    pub web_bookmarks: bool,
+    pub calculator: bool,
+    pub online_modules: WebModules,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct Misc {
     pub display_command_paths: bool,
+    pub display_file_and_directory_paths: bool,
     pub preferred_terminal: String,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct WebModules {
     pub web_search: bool,
-    pub web_bookmarks: bool,
-    pub web_history: bool,
     pub dictionary: bool,
 }
 
@@ -58,7 +60,7 @@ pub struct Indexing {
     pub size_upper_bound_GiB: f32,
 }
 
-pub fn load_config() -> Result<Config, ()> {
+pub fn load_config() -> Result<Config, Box::<dyn std::error::Error>> {
     if let Some(home) = home::home_dir() {
         let config_path = home.join(".config").join("prober").join("config.toml");
         if let Ok(file) = std::fs::File::open(config_path.clone()) {
@@ -68,30 +70,39 @@ pub fn load_config() -> Result<Config, ()> {
                 .collect::<Result<Vec<String>, _>>()
                 .unwrap()
                 .join("\n");
-            return Ok(toml::from_str(&file).unwrap());
+            return Ok(toml::from_str(&file)?);
         } else {
             let mut default_config = Config::default();
 
-            default_config.indexing.location = home
+            let indexing_location = home
                 .join(".cache")
-                .join("prober")
-                .to_str()
-                .unwrap()
-                .to_string();
+                .join("prober");
+            let indexing_location = indexing_location.to_str();
+            default_config.indexing.location = match indexing_location {
+                Some(location) => String::from(location),
+                None => return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "Error loading config.",
+                )))
+            };
 
-            let toml = toml::to_string(&default_config).unwrap();
+            let toml = toml::to_string(&default_config)?;
             let config_folder = home.join(".config").join("prober");
-            std::fs::create_dir_all(config_folder).unwrap();
-            std::fs::write(config_path, toml).unwrap();
+            std::fs::create_dir_all(config_folder)?;
+            std::fs::write(config_path, toml)?;
             return Ok(default_config);
         }
     }
-    return Err(());
+    return Err(Box::new(std::io::Error::new(
+        std::io::ErrorKind::NotFound,
+        "Error loading config.",
+    )));
 }
 
 impl Default for Config {
     fn default() -> Self {
         Config {
+            max_results: 25,
             indexing: Indexing {
                 location: String::from(""),
                 size_upper_bound_GiB: 0.5,
@@ -102,10 +113,10 @@ impl Default for Config {
                 file_contents: true,
                 pdf_contents: true,
                 steam_games: true,
-                web_modules: WebModules {
+                web_bookmarks: true,
+                calculator: true,
+                online_modules: WebModules {
                     web_search: true,
-                    web_bookmarks: true,
-                    web_history: true,
                     dictionary: true,
                 },
             },
@@ -117,6 +128,7 @@ impl Default for Config {
             },
             misc: Misc {
                 display_command_paths: false,
+                display_file_and_directory_paths: true,
                 preferred_terminal: String::from("xterm"),
             },
         }

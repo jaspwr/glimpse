@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use execute::Execute;
 use prober::config::CONF;
 
-use crate::{icon, result_templates::standard_entry, search::string_search, utils, BoxedRuntime};
+use crate::{icon, result_templates::standard_entry, search::string_search, utils, BoxedRuntime, exec::execute_detached};
 
 use super::{SearchModule, SearchResult};
 
@@ -55,10 +55,6 @@ impl Commands {
                 icon = icon::from_gtk(icon_str);
             }
 
-            if !CONF.visual.show_icons {
-                icon = None;
-            }
-
             let desc = if CONF.misc.display_command_paths {
                 Some(which(&name))
             } else {
@@ -73,7 +69,7 @@ impl Commands {
             if is_cli_app(&name) {
                 spawn_in_terminal(&name.clone());
             } else {
-                execute_detached(name.clone());
+                let _ = execute_detached(name.clone());
             }
         };
 
@@ -137,13 +133,6 @@ fn spawn_in_terminal(name: &String) {
     let _ = command.execute();
 }
 
-fn execute_detached(name: String) {
-    let mut command = Command::new("bash");
-    command.arg("-c");
-    command.arg(format!("{} & disown", name));
-    let _ = command.execute();
-}
-
 fn find_icon(name: &String) -> Option<gtk::Image> {
     let mut possible_locations = vec![
         "/usr/share/pixmaps".to_string(),
@@ -184,106 +173,105 @@ fn find_icon(name: &String) -> Option<gtk::Image> {
 }
 
 fn is_cli_app(name: &String) -> bool {
-    match name.as_str() {
-        "ls" => true,
-        "cd" => true,
-        "cat" => true,
-        "rm" => true,
-        "mv" => true,
-        "cp" => true,
-        "mkdir" => true,
-        "rmdir" => true,
-        "touch" => true,
-        "ed" => true,
-        "if" => true,
-        "then" => true,
-        "else" => true,
-        "fi" => true,
-        "for" => true,
-        "do" => true,
-        "done" => true,
-        "while" => true,
-        "until" => true,
-        "case" => true,
-        "esac" => true,
-        "vim" => true,
-        "nano" => true,
-        "ghc" => true,
-        "ghci" => true,
-        "ghcup" => true,
-        "cabal" => true,
-        "rustc" => true,
-        "cargo" => true,
-        "clang" => true,
-        "clang++" => true,
-        "gcc" => true,
-        "g++" => true,
-        "make" => true,
-        "node" => true,
-        "npm" => true,
-        "yarn" => true,
-        "pnpm" => true,
-        "npx" => true,
-        "python" => true,
-        "python3" => true,
-        "pip" => true,
-        "pip3" => true,
-        "ruby" => true,
-        "gem" => true,
-        "java" => true,
-        "javac" => true,
-        "jshell" => true,
-        "javadoc" => true,
-        "jlink" => true,
-        "jpackage" => true,
-        "jdeps" => true,
-        "jmod" => true,
-        "jdb" => true,
-        "jconsole" => true,
-        "git" => true,
-        "gitk" => true,
-        "pacman" => true,
-        "yay" => true,
-        "paru" => true,
-        "apt" => true,
-        "apt-get" => true,
-        "tar" => true,
-        "unzip" => true,
-        "zip" => true,
-        "unrar" => true,
-        "rar" => true,
-        "7z" => true,
-        "zstd" => true,
-        "gzip" => true,
-        "gunzip" => true,
-        "atool" => true,
-        "neofetch" => true,
-        "julia" => true,
-        "nvim" => true,
-        "emacs" => true,
-        "htop" => true,
-        "top" => true,
-        "btop" => true,
-        "nmtui" => true,
-        "nmcli" => true,
-        "ip" => true,
-        "ipconfig" => true,
-        "ifconfig" => true,
-        "gdb" => true,
-        "ld" => true,
-        "alias" => true,
-        "kill" => true,
-        "pkill" => true,
-        "find" => true,
-        "tree" => true,
-        "sudo" => true,
-        "su" => true,
-        "chown" => true,
-        "chmod" => true,
-        "grep" => true,
-        "sed" => true,
-        _ => false,
-    }
+    matches!(
+        name.as_str(),
+        "ls" | "cd"
+            | "cat"
+            | "rm"
+            | "mv"
+            | "cp"
+            | "mkdir"
+            | "rmdir"
+            | "touch"
+            | "ed"
+            | "if"
+            | "then"
+            | "else"
+            | "fi"
+            | "for"
+            | "do"
+            | "done"
+            | "while"
+            | "until"
+            | "case"
+            | "esac"
+            | "vim"
+            | "nano"
+            | "ghc"
+            | "ghci"
+            | "ghcup"
+            | "cabal"
+            | "rustc"
+            | "cargo"
+            | "clang"
+            | "clang++"
+            | "gcc"
+            | "g++"
+            | "make"
+            | "node"
+            | "npm"
+            | "yarn"
+            | "pnpm"
+            | "npx"
+            | "python"
+            | "python3"
+            | "pip"
+            | "pip3"
+            | "ruby"
+            | "gem"
+            | "java"
+            | "javac"
+            | "jshell"
+            | "javadoc"
+            | "jlink"
+            | "jpackage"
+            | "jdeps"
+            | "jmod"
+            | "jdb"
+            | "jconsole"
+            | "git"
+            | "gitk"
+            | "pacman"
+            | "yay"
+            | "paru"
+            | "apt"
+            | "apt-get"
+            | "tar"
+            | "unzip"
+            | "zip"
+            | "unrar"
+            | "rar"
+            | "7z"
+            | "zstd"
+            | "gzip"
+            | "gunzip"
+            | "atool"
+            | "neofetch"
+            | "julia"
+            | "nvim"
+            | "emacs"
+            | "htop"
+            | "top"
+            | "btop"
+            | "nmtui"
+            | "nmcli"
+            | "ip"
+            | "ipconfig"
+            | "ifconfig"
+            | "gdb"
+            | "ld"
+            | "alias"
+            | "kill"
+            | "pkill"
+            | "find"
+            | "tree"
+            | "sudo"
+            | "su"
+            | "chown"
+            | "chmod"
+            | "grep"
+            | "sed"
+    )
 }
 
 fn get_list() -> Result<Vec<String>, ()> {

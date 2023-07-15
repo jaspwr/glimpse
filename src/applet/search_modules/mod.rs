@@ -1,8 +1,5 @@
-use std::sync::Arc;
-
-use crate::{BoxedRuntime, SafeListBox};
+use crate::BoxedRuntime;
 use async_trait::async_trait;
-use gtk::traits::{ListBoxExt, WidgetExt};
 use prober::config::CONF;
 
 pub struct SearchResult {
@@ -28,6 +25,7 @@ mod commands;
 mod dictionary;
 mod files;
 mod steam_games;
+mod web_bookmarks;
 
 pub fn load_standard_modules(rt: BoxedRuntime) -> Vec<BoxedSearchModule> {
     let mut ret = Vec::<BoxedSearchModule>::new();
@@ -36,7 +34,7 @@ pub fn load_standard_modules(rt: BoxedRuntime) -> Vec<BoxedSearchModule> {
         ret.push(Box::new(commands::Commands::new(rt.clone())));
     }
 
-    if CONF.modules.web_modules.dictionary {
+    if CONF.modules.online_modules.dictionary {
         ret.push(Box::new(dictionary::Dictionary::new()));
     }
 
@@ -48,6 +46,10 @@ pub fn load_standard_modules(rt: BoxedRuntime) -> Vec<BoxedSearchModule> {
     ret.push(Box::new(files::Files::new(rt.clone())));
 
     ret.push(Box::new(calculator::Calculator::new()));
+
+    if CONF.modules.web_bookmarks {
+        ret.push(Box::new(web_bookmarks::WebBookmarks::new(rt.clone())));
+    }
 
     ret
 }

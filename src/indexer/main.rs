@@ -14,11 +14,11 @@ fn reindex() {
     // TODO: Make this configurable
     let ignore_dirs = vec![
         "target",
-        "node_modules",
+        // "node_modules",
         "zig-cache",
         "zig-out",
         "_prefix32_wine",
-        "x86_64-pc-linux-gnu-library",
+        // "x86_64-pc-linux-gnu-library",
     ];
 
     let _ = index_dir(&path, &false, &mut files, &mut dirs, &ignore_dirs);

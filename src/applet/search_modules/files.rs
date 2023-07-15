@@ -1,11 +1,11 @@
-use std::sync::Arc;
+use std::{sync::Arc, path::PathBuf};
 
 use async_trait::async_trait;
 use execute::Execute;
-use prober::indexing::{tokenize_string, Index};
+use prober::{indexing::{tokenize_string, Index}, config::CONF};
 
 use crate::{
-    icon, result_templates::standard_entry, search::string_search, utils::simple_hash, BoxedRuntime,
+    icon, result_templates::standard_entry, search::string_search, utils::simple_hash, BoxedRuntime, exec::xdg_open,
 };
 
 use super::{SearchModule, SearchResult};
@@ -55,16 +55,7 @@ impl SearchModule for Files {
                         .get(&token)
                         .unwrap_or(&vec![])
                         .into_iter()
-                        .map(|(s, relevance)| {
-                            let s = s.to_str().unwrap().to_string();
-
-                            let mut relevance = *relevance;
-                            if relevance > 3.0 {
-                                relevance = 3.0;
-                            }
-
-                            self.create_result(s, relevance, FileType::File)
-                        })
+                        .map(|(s, r)| self.handle_tf_idf_result(s, r))
                         .collect::<Vec<SearchResult>>()
                 })
                 .flatten()
@@ -80,6 +71,14 @@ impl SearchModule for Files {
 }
 
 impl Files {
+    fn handle_tf_idf_result(&self, s: &PathBuf, relevance: &f32) -> SearchResult {
+        let s = s.to_str().unwrap().to_string();
+
+        let relevance = clamp_relevance(relevance);
+
+        self.create_result(s, relevance, FileType::File)
+    }
+
     fn create_result(&self, name: String, relevance: f32, kind: FileType) -> SearchResult {
         let name_cpy = name.clone();
         let render = move || {
@@ -98,16 +97,18 @@ impl Files {
 
             let icon = icon::from_gtk(icon_name);
 
-            let desc = Some(name_cpy.clone());
+            let desc = if CONF.misc.display_file_and_directory_paths {
+                Some(name_cpy.clone())
+            } else {
+                None
+            };
+
             standard_entry(name, icon, desc)
         };
 
         let name_cpy = name.clone();
         let on_select = move || {
-            let mut command = std::process::Command::new("bash");
-            command.arg("-c");
-            command.arg(format!("xdg-open \"{}\" & disown", name_cpy.clone()));
-            let _ = command.execute();
+           let _ = xdg_open(&name_cpy);
         };
 
         SearchResult {
@@ -117,6 +118,15 @@ impl Files {
             on_select: Some(Box::new(on_select)),
         }
     }
+}
+
+#[inline]
+fn clamp_relevance(relevance: &f32) -> f32 {
+    let mut relevance = *relevance;
+    if relevance > 3.0 {
+        relevance = 3.0;
+    }
+    relevance
 }
 
 fn find_file_icon_name(ext: &str) -> &str {
@@ -131,7 +141,7 @@ fn find_file_icon_name(ext: &str) -> &str {
         "zip" | "tar" | "gz" | "xz" | "bz2" | "7z" => "package-x-generic",
         "rs" => "text-x-rust",
         "py" => "text-x-python",
-        "js" => "text-x-javascript",
+        "js" | "ts" => "text-x-javascript",
         "json" => "text-x-javascript",
         "c" => "text-x-csrc",
         "cpp" => "text-x-c++src",
@@ -140,11 +150,16 @@ fn find_file_icon_name(ext: &str) -> &str {
         "hs" => "text-x-haskell",
         "sh" => "text-x-script",
         "html" | "htm" => "text-html",
+        "svelte" => "text-html",
+        "jsx" => "text-javascript",
         "css" => "text-css",
+        "scss" => "text-css",
+        "sass" => "text-css",
         "md" => "text-x-markdown",
         "exe" => "application-x-executable",
         "deb" | "rpm" => "package-x-generic",
         "tex" => "text-x-tex",
+        "toml" => "text-x-toml",
         _ => "text-x-generic",
     }
 }

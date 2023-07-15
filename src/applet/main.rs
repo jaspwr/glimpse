@@ -16,9 +16,11 @@ mod result_templates;
 mod search;
 mod search_modules;
 mod utils;
+mod exec;
 
 static CONTROL: AtomicBool = AtomicBool::new(false);
 
+use prober::config::CONF;
 use search_modules::{SearchModule, SearchResult};
 
 pub static RUNTIME: Lazy<BoxedRuntime> = Lazy::new(|| {
@@ -164,6 +166,8 @@ fn main() {
             gtk::Inhibit(false)
         });
 
+        window.activate();
+
         perform_search(
             "".to_string(),
             list.clone(),
@@ -226,6 +230,7 @@ fn get_entry_id(widget: &gtk::Widget) -> u64 {
     }
 }
 
+#[inline]
 fn get_entry_relevance(widget: gtk::Widget) -> f32 {
     unsafe {
         if let Some(data_ptr) = widget.steal_data::<*mut ResultData>("dat") {
@@ -236,7 +241,7 @@ fn get_entry_relevance(widget: gtk::Widget) -> f32 {
             let data_ptr = Box::into_raw(data);
             widget.set_data("dat", data_ptr);
 
-            return relevance;
+            relevance
         } else {
             0.0
         }
@@ -264,7 +269,7 @@ fn use_entry_data(widget: &gtk::ListBoxRow, action: Box<dyn Fn(&ResultData) -> (
 }
 
 fn handle_search_field_keypress(key: gdk::keys::Key, list: Arc<Mutex<SafeListBox>>) {
-    if FAKE_FIRST_SELECTED.lock().unwrap().clone()
+    if *FAKE_FIRST_SELECTED.lock().unwrap()
         && (key == gdk::keys::constants::Down || key == gdk::keys::constants::Up)
     {
         (*FAKE_FIRST_SELECTED.lock().unwrap()) = false;
@@ -298,8 +303,6 @@ fn handle_search_field_keypress(key: gdk::keys::Key, list: Arc<Mutex<SafeListBox
         if let Some(first_entry) = first_entry {
             perform_entry_action(first_entry);
         }
-
-        return;
     }
 }
 
@@ -321,18 +324,7 @@ fn handle_list_keypress(key: gdk::keys::Key, search_field: Arc<gtk::Entry>, list
         let text = search_field.text().to_string();
         let control = CONTROL.load(Ordering::Relaxed);
 
-        let mut pos = text.len() as i32 - 1;
-        if control {
-            while pos > 0 {
-                if text.chars().nth(pos as usize).unwrap() == ' ' {
-                    break;
-                }
-                pos -= 1;
-            }
-            if pos > 0 {
-                pos += 1;
-            }
-        }
+        let pos = step_back_word(text, control);
 
         search_field.set_position(pos);
         return;
@@ -340,34 +332,48 @@ fn handle_list_keypress(key: gdk::keys::Key, search_field: Arc<gtk::Entry>, list
 
     let backspace = key == gdk::keys::constants::BackSpace;
 
-    match key.to_unicode() {
-        Some(key) => {
-            let control = CONTROL.load(Ordering::Relaxed);
-            let text = search_field.text().to_string();
-            if !backspace {
-                if (key == 'a' || key == 'A') && control {
-                    // HACK: The text is generally just selected
-                    //       by default. Returning means we don't
-                    //       call unselect all.
-                    search_field.grab_focus();
-                    return;
-                }
-                search_field.set_text((text + &key.to_string()).as_str());
-            } else {
-                if text.len() > 0 {
-                    if control {
-                        search_field.set_text("");
-                    } else {
-                        search_field.set_text(&text[0..text.len() - 1]);
-                    }
+    if let Some(key) = key.to_unicode() {
+        let control = CONTROL.load(Ordering::Relaxed);
+        let text = search_field.text().to_string();
+        if !backspace {
+            if (key == 'a' || key == 'A') && control {
+                // HACK: The text is generally just selected
+                //       by default. Returning means we don't
+                //       call unselect all.
+                search_field.grab_focus();
+                return;
+            }
+            search_field.set_text((text + &key.to_string()).as_str());
+        } else {
+            if !text.is_empty() {
+                if control {
+                    search_field.set_text("");
+                } else {
+                    search_field.set_text(&text[0..text.len() - 1]);
                 }
             }
-            list.unselect_all();
-            search_field.grab_focus();
-            search_field.set_position(-1);
         }
-        None => {}
+        list.unselect_all();
+        search_field.grab_focus();
+        search_field.set_position(-1);
     }
+}
+
+#[inline]
+fn step_back_word(text: String, control: bool) -> i32 {
+    let mut pos = text.len() as i32 - 1;
+    if control {
+        while pos > 0 {
+            if text.chars().nth(pos as usize).unwrap() == ' ' {
+                break;
+            }
+            pos -= 1;
+        }
+        if pos > 0 {
+            pos += 1;
+        }
+    }
+    pos
 }
 
 pub struct SafeListBox {
@@ -412,21 +418,24 @@ pub async fn append_results(results: Vec<SearchResult>, list: Arc<std::sync::Mut
         // let rect = Rectangle::new(0, 0, 300, 400);
         // list.list.size_allocate(&rect);
 
-        const MAX_ENTRIES: usize = 10;
-        while list.list.children().len() > MAX_ENTRIES {
-            let children = list.list.children();
-            let last_child = children.last().unwrap();
-            free_entry_data(&last_child);
-            list.list.remove(last_child);
-        }
+        remove_excess_entries(&list);
 
-        if list.list.selected_row().is_none() || FAKE_FIRST_SELECTED.lock().unwrap().clone() {
+        if list.list.selected_row().is_none() || *FAKE_FIRST_SELECTED.lock().unwrap() {
             if let Some(first_row) = list.list.row_at_index(0) {
                 list.list.select_row(Some(&first_row));
             }
             (*FAKE_FIRST_SELECTED.lock().unwrap()) = true;
         }
     });
+}
+
+fn remove_excess_entries(list: &std::sync::MutexGuard<'_, SafeListBox>) {
+    while list.list.children().len() > CONF.max_results {
+        let children = list.list.children();
+        let last_child = children.last().unwrap();
+        free_entry_data(last_child);
+        list.list.remove(last_child);
+    }
 }
 
 fn find_slot(relevance: f32, id: u64, list: &SafeListBox) -> Option<i32> {
@@ -458,12 +467,12 @@ struct ResultData {
     action: Option<Box<dyn Fn() -> () + Sync + Send>>,
 }
 
+#[inline]
 fn grab_seat(window: &gtk::gdk::Window) {
     let display = window.display();
     let seat = display.default_seat().unwrap();
 
-    let capabilities = gdk_sys::GDK_SEAT_CAPABILITY_POINTER
-    /* | gdk_sys::GDK_SEAT_CAPABILITY_KEYBOARD */;
+    let capabilities = gdk_sys::GDK_SEAT_CAPABILITY_POINTER | gdk_sys::GDK_SEAT_CAPABILITY_KEYBOARD;
 
     let status = seat.grab(
         window,

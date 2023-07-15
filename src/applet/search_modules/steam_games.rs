@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use execute::Execute;
 
 use crate::{
-    icon, result_templates::standard_entry, search::string_search, utils::simple_hash, BoxedRuntime,
+    icon, result_templates::standard_entry, search::string_search, utils::simple_hash, BoxedRuntime, exec::execute_detached,
 };
 
 use super::{SearchModule, SearchResult};
@@ -67,10 +67,8 @@ fn create_result(data: &GamesData, name: String, relevance: f32) -> SearchResult
     };
 
     let on_select = move || {
-        let mut command = std::process::Command::new("bash");
-        command.arg("-c");
-        command.arg(format!("steam steam://rungameid/{} & disown", id.clone()));
-        let _ = command.execute();
+        let cmd = format!("steam steam://rungameid/{} & disown", id.clone());
+        let _ = execute_detached(cmd);
     };
 
     SearchResult {
