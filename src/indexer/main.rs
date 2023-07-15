@@ -14,11 +14,11 @@ fn reindex() {
     // TODO: Make this configurable
     let ignore_dirs = vec![
         "target",
-        // "node_modules",
+        "node_modules",
         "zig-cache",
         "zig-out",
         "_prefix32_wine",
-        // "x86_64-pc-linux-gnu-library",
+        "x86_64-pc-linux-gnu-library",
     ];
 
     let _ = index_dir(&path, &false, &mut files, &mut dirs, &ignore_dirs);
@@ -88,12 +88,6 @@ fn handle_dir_entry(
         if !index_hidden && is_hidden_file(&entry) {
             return Ok(());
         }
-        if let Some(kind) = infer::get_from_path(&entry.path())? {
-            if kind.mime_type() == "document/pdf" {
-                // TODO
-            }
-        }
-
         files.push(entry.path());
         // TODO
     }

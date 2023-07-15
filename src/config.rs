@@ -18,6 +18,7 @@ pub struct Config {
     pub modules: Modules,
     pub use_web_modules: bool,
     pub visual: Visual,
+    pub window: Window,
     pub misc: Misc,
 }
 
@@ -47,10 +48,17 @@ pub struct WebModules {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct Window {
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct Visual {
     pub show_icons: bool,
     pub icon_size: u32,
     pub result_borders: bool,
+    pub dark_result_borders: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -124,7 +132,12 @@ impl Default for Config {
             visual: Visual {
                 show_icons: true,
                 icon_size: 32,
-                result_borders: true,
+                result_borders: false,
+                dark_result_borders: false,
+            },
+            window: Window {
+                width: 420,
+                height: 400,
             },
             misc: Misc {
                 display_command_paths: false,

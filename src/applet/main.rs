@@ -1,22 +1,25 @@
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc, Mutex,
+use std::{
+    marker::PhantomData,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
 };
 
 use biases::increment_bias;
 use futures::{future::abortable, stream::AbortHandle};
 use gdk::glib::once_cell::sync::Lazy;
 use gdk::{glib::idle_add_once, SeatCapabilities};
-use gtk::prelude::*;
+use gtk::{prelude::*, Adjustment, Scrollable, subclass::scrolled_window};
 
 mod biases;
+mod exec;
 mod icon;
 mod prelude;
 mod result_templates;
 mod search;
 mod search_modules;
 mod utils;
-mod exec;
 
 static CONTROL: AtomicBool = AtomicBool::new(false);
 
@@ -41,8 +44,8 @@ fn main() {
         .build();
 
     application.connect_activate(|app| {
-        let width = 350;
-        let height = 300;
+        let width = CONF.window.width as i32;
+        let height = CONF.window.height as i32;
 
         let window = gtk::ApplicationWindow::builder()
             .application(app)
@@ -66,7 +69,47 @@ fn main() {
         let search_field = gtk::Entry::new();
 
         container.add(&search_field);
-        container.add(&list);
+
+        let scrolled_window = gtk::ScrolledWindow::new(
+            Option::<&gtk::Adjustment>::None,
+            Option::<&gtk::Adjustment>::None,
+        );
+
+        scrolled_window.set_policy(
+            gtk::PolicyType::External,
+            gtk::PolicyType::Automatic,
+        );
+
+        scrolled_window.set_size_request(width, height - 30);
+
+        scrolled_window.add(&list);
+
+        container.add(&scrolled_window);
+
+        if CONF.visual.result_borders {
+            let style_provider = gtk::CssProvider::new();
+
+            if CONF.visual.dark_result_borders {
+                let _ = style_provider.load_from_data("
+                    .outlined-container {
+                        border-bottom: 1px solid rgba(0,0,0,.1);
+                    }
+                ".as_bytes()).unwrap();
+            } else {
+                let _ = style_provider.load_from_data("
+                    .outlined-container {
+                        border-bottom: 1px solid rgba(255,255,255,.1);
+                    }
+                ".as_bytes()).unwrap();
+            }
+
+            let screen = gdk::Screen::default().unwrap();
+            gtk::StyleContext::add_provider_for_screen(
+                &screen,
+                &style_provider,
+                gtk::STYLE_PROVIDER_PRIORITY_USER,
+            );
+        }
 
         let list = Arc::new(Mutex::new(SafeListBox { list }));
 
@@ -397,8 +440,13 @@ pub async fn append_results(results: Vec<SearchResult>, list: Arc<std::sync::Mut
 
             let entry = (result.render)();
 
+
             list.list.insert(&entry, index);
             let row = list.list.row_at_index(index).unwrap();
+
+            if CONF.visual.result_borders {
+                row.style_context().add_class("outlined-container");
+            }
 
             let data = ResultData {
                 relevance: result.relevance,

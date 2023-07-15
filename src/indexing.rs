@@ -1,8 +1,11 @@
 use std::{
     collections::HashMap,
     io::{BufRead, BufReader},
-    path::PathBuf,
+    path::PathBuf, fs::File,
 };
+
+use docx_rs::*;
+use lopdf::Document;
 
 use gdk::glib::once_cell::sync::Lazy;
 use savefile_derive::Savefile;
@@ -30,7 +33,7 @@ impl Index {
     pub fn save(&self, name: &str) {
         let path = PATH.join(name).with_extension("bin");
         let mut file = std::fs::File::create(path).unwrap();
-        savefile::save_compressed(&mut file, 0, self).unwrap();
+        savefile::save(&mut file, 0, self).unwrap();
     }
 
     pub async fn load(name: &str) -> Option<Index> {
@@ -46,36 +49,100 @@ impl Index {
 
 const WORD_BUF_SIZE: usize = 100;
 
-pub fn tokenize_file(path: &PathBuf) -> Option<Vec<String>> {
-    let mut tokens = vec![];
-    let file = std::fs::File::open(path).unwrap();
-    let file = BufReader::new(file);
+fn load_as_pdf(path: &PathBuf) -> Option<String> {
+    let doc = Document::load(path).ok()?;
+    let pages = doc.get_pages();
 
-    let mut word_buf: [char; WORD_BUF_SIZE] = ['\0'; WORD_BUF_SIZE];
-    let mut word_buf_index = 0;
+    let mut pages = pages.len() as u32;
 
-    let mut pre_is_alpha = false;
+    if pages == 0 {
+        return None;
+    }
 
-    for line in file.lines() {
-        let line = match line {
-            Ok(line) => line,
-            Err(_) => return None,
-        };
-        for c in line.chars() {
-            handle_char(
-                c,
-                &mut pre_is_alpha,
-                &mut word_buf_index,
-                &mut word_buf,
-                &mut tokens,
-            );
-        }
+    const MAX_PAGES: u32 = 50;
+    if pages > MAX_PAGES {
+        pages = MAX_PAGES;
+    }
 
-        if pre_is_alpha {
-            append_word(&word_buf, word_buf_index, &mut tokens);
+    let range = (1..=pages).collect::<Vec<u32>>();
+    let text = doc.extract_text(&range).ok()?;
+
+    Some(text)
+}
+
+fn load_docx(path: &PathBuf) -> Option<String> {
+    let bytes = std::fs::read(path).unwrap();
+
+    let doc = docx_rs::read_docx(&bytes).ok()?.document;
+    let contents = get_doc_text(doc.children);
+
+    Some(contents)
+}
+
+fn get_doc_text(doc: Vec<DocumentChild>) -> String {
+    // This just has to be like this...
+    // This crate isn't really meant to be used like this I think.
+    let mut ret = String::new();
+    for child in doc {
+        match child {
+            DocumentChild::Paragraph(paragraph) => {
+                for child in paragraph.children {
+                    match child {
+                        ParagraphChild::Run(run) => {
+                            for child in run.children {
+                                match child {
+                                    RunChild::Text(text) => {
+                                        ret += format!("{}", text.text).as_str();
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
         }
     }
-    Some(tokens)
+    ret
+}
+
+
+enum FileType {
+    Unknown,
+    Pdf,
+    Docx,
+}
+
+pub fn tokenize_file(path: &PathBuf) -> Option<Vec<String>> {
+    let mut file_type = match infer::get_from_path(path).ok()? {
+        Some(type_) => match type_.mime_type() {
+            "application/pdf" => FileType::Pdf,
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document" | "application/word" =>
+                FileType::Docx,
+
+            _ => {
+                FileType::Unknown
+            }
+
+        },
+        None => FileType::Unknown,
+    };
+
+    if let Some(ext) = path.extension() {
+        if ext == "docx" {
+            file_type = FileType::Docx;
+        }
+    }
+
+    let file = match file_type {
+        FileType::Pdf => load_as_pdf(path)?,
+        FileType::Docx => load_docx(path)?,
+        _ => std::fs::read_to_string(path).ok()?,
+    };
+
+    Some(tokenize_string(&file))
 }
 
 pub fn tokenize_string(str: &String) -> Vec<String> {

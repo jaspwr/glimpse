@@ -1,8 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
-use gdk::{gdk_pixbuf, keys::constants::V};
-use prober::config::CONF;
 
 use crate::{
     exec::xdg_open, icon, result_templates::standard_entry, search::string_search,
@@ -31,40 +29,17 @@ impl SearchModule for WebBookmarks {
         let lock = self.data.lock().await;
         let list = lock.as_ref();
         if let Some(list) = list {
-            let mut ret = vec![];
-            for (name, relevance) in
-                string_search(&query, &list.titles, max_results, Box::new(id_hash), false)
-            {
-                let name_cpy = name.clone();
-
-                // let icon = fetch_favicon(&list.url_map.get(&name).unwrap()).await;
-
-                let render = move || {
-                    let icon = icon::from_gtk("emblem-web");
-                    standard_entry(name_cpy.clone(), icon, None)
-                };
-
-                let url = list.url_map.get(&name).unwrap().clone();
-
-                let on_select = move || {
-                    let _ = xdg_open(&url);
-                };
-
-                let res = SearchResult {
-                    render: Box::new(render),
-                    relevance,
-                    id: id_hash(&name),
-                    on_select: Some(Box::new(on_select)),
-                };
-
-                ret.push(res);
-            }
-            ret
+            string_search(&query, &list.titles, max_results, Box::new(id_hash), false)
+                .into_iter()
+                .map(|(name, rel)| Self::create_result(&name, rel, &list.url_map))
+                .collect()
         } else {
             vec![]
         }
     }
 }
+
+
 
 fn id_hash(name: &String) -> u64 {
     (simple_hash(name) >> 3) + 0x123809abedf
@@ -94,6 +69,29 @@ impl WebBookmarks {
         });
 
         WebBookmarks { data }
+    }
+
+    fn create_result(name: &String, relevance: f32, url_map: &HashMap<String, String>) -> SearchResult {
+        // let icon = fetch_favicon(&list.url_map.get(&name).unwrap()).await;
+
+        let name_cpy = name.clone();
+        let render = move || {
+            let icon = icon::from_gtk("emblem-web");
+            standard_entry(name_cpy.clone(), icon, None)
+        };
+
+        let url = url_map.get(name).unwrap().clone();
+
+        let on_select = move || {
+            let _ = xdg_open(&url);
+        };
+
+        SearchResult {
+            render: Box::new(render),
+            relevance,
+            id: id_hash(&name),
+            on_select: Some(Box::new(on_select)),
+        }
     }
 }
 
