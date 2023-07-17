@@ -214,7 +214,10 @@ fn try_create_child(child: &serde_json::Value) -> Option<BookmarkEntry> {
 fn get_firefox_bookmarks() -> Vec<BookmarkEntry> {
     let home = home::home_dir().unwrap();
     let firefox_path = home.join(".mozilla").join("firefox");
-    let dir = std::fs::read_dir(firefox_path).unwrap();
+    let dir = match std::fs::read_dir(firefox_path) {
+        Ok(dir) => dir,
+        Err(_) => return vec![],
+    };
 
     dir.into_iter()
         .filter_map(|entry| entry.ok())

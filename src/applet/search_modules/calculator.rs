@@ -176,6 +176,8 @@ fn swap_words(tokens: Vec<Token>) -> Option<Vec<Token>> {
                 ret.push(Token::Operator('-'));
             } else if s == "pi" {
                 ret.push(Token::Number(std::f64::consts::PI));
+            } else if s == "d" {
+                ret.push(Token::Operator('d'));
             } else if s == "e" {
                 ret.push(Token::Number(std::f64::consts::E));
             } else if FUNCTIONS.contains(&s.as_str()) {
@@ -326,14 +328,35 @@ fn call(ts: Tokens) -> Option<(Tokens, f64)> {
     let first_token = ts.iter().next()?;
     if let Token::Function(name) = first_token {
         let ts = ts[1..].to_vec();
-        let (ts, n) = brack(ts)?;
+        let (ts, n) = dice_roll(ts)?;
         if let Some(n) = run_fn(&name, n) {
             Some((ts, n))
         } else {
             None
         }
     } else {
-        brack(ts)
+        dice_roll(ts)
+    }
+}
+
+#[rustfmt::skip]
+fn dice_roll(ts: Tokens) -> Option<(Tokens, f64)> {
+    brack(ts)
+    .bind(|(ts, left)|
+        dice_roll_prime(ts)
+        .bind(|(ts, right)|
+            Some((ts, left.powf(right)))))
+}
+
+#[rustfmt::skip]
+fn dice_roll_prime(ts: Tokens) -> Option<(Tokens, f64)> {
+    match try_consume(&ts, Token::Operator('d')) {
+        Some(ts) => brack(ts)
+            .bind(|(ts, left)|
+                dice_roll(ts)
+                .bind(|(ts, right)|
+                    Some((ts, left * right)))),
+        None => Some((ts, 1.0))
     }
 }
 
