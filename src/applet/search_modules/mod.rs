@@ -34,10 +34,6 @@ pub fn load_standard_modules(rt: BoxedRuntime) -> Vec<BoxedSearchModule> {
         ret.push(Box::new(commands::Commands::new(rt.clone())));
     }
 
-    if CONF.modules.online_modules.dictionary {
-        ret.push(Box::new(dictionary::Dictionary::new()));
-    }
-
     if CONF.modules.steam_games {
         ret.push(Box::new(steam_games::SteamGames::new(rt.clone())));
     }
@@ -52,6 +48,12 @@ pub fn load_standard_modules(rt: BoxedRuntime) -> Vec<BoxedSearchModule> {
 
     if CONF.modules.web_bookmarks {
         ret.push(Box::new(web_bookmarks::WebBookmarks::new(rt.clone())));
+    }
+
+    if CONF.use_online_modules {
+        if CONF.modules.online_modules.dictionary {
+            ret.push(Box::new(dictionary::Dictionary::new()));
+        }
     }
 
     ret

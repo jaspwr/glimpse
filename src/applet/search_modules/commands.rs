@@ -1,5 +1,4 @@
 use std::{
-    fs,
     process::{Command, Stdio},
     sync::Arc,
 };
@@ -9,7 +8,11 @@ use execute::Execute;
 use prober::config::CONF;
 
 use crate::{
-    exec::execute_detached, icon, result_templates::standard_entry, search::string_search, utils::{self, is_cli_app},
+    exec::execute_detached,
+    icon,
+    result_templates::standard_entry,
+    search::string_search,
+    utils::{self, is_cli_app},
     BoxedRuntime,
 };
 

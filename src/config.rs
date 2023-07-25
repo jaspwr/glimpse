@@ -1,6 +1,6 @@
 use std::{
     io::{BufRead, BufReader},
-    path::PathBuf, error::Error,
+    path::PathBuf, error::Error, fs,
 };
 
 use pango::glib::once_cell::sync::Lazy;
@@ -36,7 +36,7 @@ pub struct Config {
     pub max_results: usize,
     pub indexing: Indexing,
     pub modules: Modules,
-    pub use_web_modules: bool,
+    pub use_online_modules: bool,
     pub search_paths: Vec<PathBuf>,
     pub search_hidden_folders: bool,
     pub ignore_directories: Vec<String>,
@@ -101,7 +101,20 @@ pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
                 .collect::<Result<Vec<String>, _>>()
                 .unwrap()
                 .join("\n");
-            Ok(toml::from_str(&file)?)
+
+            let conf: Config = toml::from_str(&file)?;
+
+            if conf.indexing.size_upper_bound_GiB < 0.0 {
+                return Err("Can't have negative size for upper bound of indexing.".to_string().into());
+            }
+
+            for path in &conf.search_paths {
+                if !PathBuf::from(path.clone()).exists() {
+                    return Err("Indexing location does not exist.".to_string().into());
+                }
+            }
+
+            Ok(conf)
         } else {
             create_new_config_file(home, config_path)
         }
@@ -164,7 +177,7 @@ impl Default for Config {
                     dictionary: true,
                 },
             },
-            use_web_modules: false,
+            use_online_modules: true,
             search_paths: vec![home::home_dir().unwrap_or(PathBuf::from("/home"))],
             search_hidden_folders: false,
             ignore_directories: ignore_dirs,
