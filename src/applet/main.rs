@@ -20,7 +20,7 @@ mod utils;
 
 static CONTROL: AtomicBool = AtomicBool::new(false);
 
-use prober::config::CONF;
+use prober::config::{CONF, CONF_FILE_PATH};
 use search_modules::{SearchModule, SearchResult};
 
 pub static RUNTIME: Lazy<BoxedRuntime> = Lazy::new(|| {
@@ -48,15 +48,24 @@ fn main() {
             .application(app)
             .title("Prober")
             .default_width(width)
-            .default_height(height)
+            .default_height(1)
             .resizable(false)
             .decorated(false)
-            // .type_hint(gdk::WindowTypeHint::PopupMenu)
+            .type_hint(gdk::WindowTypeHint::PopupMenu)
             .build();
 
         window.set_keep_above(true);
 
-        window.set_position(gtk::WindowPosition::Center);
+        let (window_x, window_y) = window.position();
+
+        let display = window.display();
+        let monitor = display.monitor_at_point(window_x, window_y).unwrap();
+        let monitor = monitor.geometry();
+
+        let win_x = (monitor.width() - width) / 2;
+        let win_y = (monitor.height() - height) / 2;
+
+        window.move_(win_x, win_y);
 
         let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
 
@@ -64,6 +73,8 @@ fn main() {
         list.set_selection_mode(gtk::SelectionMode::Browse);
 
         let search_field = gtk::Entry::new();
+
+        let search_field_height = 30;
 
         container.add(&search_field);
 
@@ -74,15 +85,17 @@ fn main() {
 
         scrolled_window.set_policy(gtk::PolicyType::External, gtk::PolicyType::Automatic);
 
-        scrolled_window.set_size_request(width, height - 30);
+        scrolled_window.set_size_request(width, height - search_field_height);
 
         scrolled_window.add(&list);
 
         container.add(&scrolled_window);
 
-        if CONF.visual.result_borders {
-            let style_provider = gtk::CssProvider::new();
+        let boxed_scrolled_window = Arc::new(scrolled_window);
 
+        let style_provider = gtk::CssProvider::new();
+
+        if CONF.visual.result_borders {
             if CONF.visual.dark_result_borders {
                 #[rustfmt::skip]
                 style_provider.load_from_data(
@@ -96,13 +109,6 @@ fn main() {
                         border-bottom: 1px solid rgba(255,255,255,.1);
                     }".as_bytes(),).unwrap();
             }
-
-            let screen = gdk::Screen::default().unwrap();
-            gtk::StyleContext::add_provider_for_screen(
-                &screen,
-                &style_provider,
-                gtk::STYLE_PROVIDER_PRIORITY_USER,
-            );
         }
 
         let list = Arc::new(Mutex::new(SafeListBox { list }));
@@ -116,6 +122,12 @@ fn main() {
         let current_task_handle_cpy = current_task_handle.clone();
         let rt_cpy = rt.clone();
         search_field.connect_changed(move |entry| {
+            if entry.text().is_empty() {
+                boxed_scrolled_window.clone().hide();
+            } else {
+                boxed_scrolled_window.clone().show_all();
+            }
+
             let current_task_handle = current_task_handle_cpy.clone();
             {
                 let mut current_task_handle = current_task_handle.lock().unwrap();
@@ -169,12 +181,14 @@ fn main() {
 
         let search_field = Arc::new(search_field);
 
+        let search_field_cpy = search_field.clone();
+
         list.lock()
             .unwrap()
             .list
             .connect_key_press_event(move |list, key_event| -> Inhibit {
                 let key = key_event.keyval();
-                let search_field = search_field.clone();
+                let search_field = search_field_cpy.clone();
 
                 handle_list_keypress(key, search_field, list);
 
@@ -193,8 +207,53 @@ fn main() {
                 Inhibit(false)
             });
 
+        if let Some(err) = CONF.error.as_ref() {
+            #[rustfmt::skip]
+            style_provider.load_from_data(".error-title {
+                color: red;
+                font-weight: bold;
+            }
+
+            .error-details {
+                color: red;
+                font-family: monospace, monospace;
+            }".as_bytes()).unwrap();
+
+            let error_title = format!("Error loading config; using default config. Either correct the errors or delete the config file to have a new one generated. Your config file is located at: \"{}\"",
+                CONF_FILE_PATH.to_str().unwrap());
+
+            let error_title = gtk::Label::new(Some(&error_title.as_str()));
+
+            error_title.set_halign(gtk::Align::Start);
+            error_title.set_line_wrap(true);
+            error_title.set_line_wrap_mode(pango::WrapMode::WordChar);
+            error_title.set_max_width_chars(40);
+
+            error_title.style_context().add_class("error-title");
+            container.add(&error_title);
+            error_title.show();
+
+
+            let error_details = gtk::Label::new(Some(err));
+            error_details.style_context().add_class("error-details");
+            container.add(&error_details);
+            error_details.show();
+        }
+
         window.set_child(Some(&container));
-        window.show_all();
+
+        let screen = gdk::Screen::default().unwrap();
+        gtk::StyleContext::add_provider_for_screen(
+            &screen,
+            &style_provider,
+            gtk::STYLE_PROVIDER_PRIORITY_USER,
+        );
+
+        container.show();
+        window.show();
+        search_field.show();
+
+        search_field.grab_focus();
 
         window.connect_focus_in_event(|window, _| {
             grab_seat(&window.window().unwrap());
@@ -202,6 +261,8 @@ fn main() {
         });
 
         window.activate();
+
+        window.set_size_request(width, 1);
 
         perform_search("".to_string(), list, current_task_handle, rt);
     });
@@ -448,9 +509,6 @@ pub async fn append_results(results: Vec<SearchResult>, list: Arc<std::sync::Mut
 
             entry.show_all();
         }
-
-        // let rect = Rectangle::new(0, 0, 300, 400);
-        // list.list.size_allocate(&rect);
 
         remove_excess_entries(&list);
 

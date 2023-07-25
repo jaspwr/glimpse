@@ -42,10 +42,13 @@ pub fn load_standard_modules(rt: BoxedRuntime) -> Vec<BoxedSearchModule> {
         ret.push(Box::new(steam_games::SteamGames::new(rt.clone())));
     }
 
-    //TODO conf
-    ret.push(Box::new(files::Files::new(rt.clone())));
+    if CONF.modules.files {
+        ret.push(Box::new(files::Files::new(rt.clone())));
+    }
 
-    ret.push(Box::new(calculator::Calculator::new()));
+    if CONF.modules.calculator {
+        ret.push(Box::new(calculator::Calculator::new()));
+    }
 
     if CONF.modules.web_bookmarks {
         ret.push(Box::new(web_bookmarks::WebBookmarks::new(rt.clone())));

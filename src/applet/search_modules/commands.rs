@@ -9,7 +9,7 @@ use execute::Execute;
 use prober::config::CONF;
 
 use crate::{
-    exec::execute_detached, icon, result_templates::standard_entry, search::string_search, utils,
+    exec::execute_detached, icon, result_templates::standard_entry, search::string_search, utils::{self, is_cli_app},
     BoxedRuntime,
 };
 
@@ -46,17 +46,7 @@ impl Commands {
         let render = move || {
             let name = name_cpy.clone();
 
-            let mut icon = find_icon(&name);
-
-            // TODO: Store pixbuf somewhere
-            if icon.is_none() {
-                let icon_str = if is_cli_app(&name) {
-                    "utilities-terminal"
-                } else {
-                    "application-x-executable"
-                };
-                icon = icon::from_gtk(icon_str);
-            }
+            let icon = icon::find_application_icon(&name);
 
             let desc = if CONF.misc.display_command_paths {
                 Some(which(&name))
@@ -134,147 +124,6 @@ fn spawn_in_terminal(name: &String) {
         name
     ));
     let _ = command.execute();
-}
-
-fn find_icon(name: &String) -> Option<gtk::Image> {
-    let mut possible_locations = vec![
-        "/usr/share/pixmaps".to_string(),
-        "/usr/share/icons/hicolor/32x32/apps/".to_string(),
-        "/usr/share/icons/hicolor/symbolic/apps".to_string(),
-        "/usr/share/icons/hicolor/scalable/apps".to_string(),
-    ];
-
-    let home_dir = std::env::var("HOME").unwrap().to_string();
-
-    if let Ok(paths) = fs::read_dir(home_dir + "/.icons") {
-        for path in paths {
-            let path = path.unwrap().path();
-            if path.is_dir() {
-                let path = path.to_str().unwrap().to_string();
-                possible_locations.push(path + "/32x32/apps");
-            }
-        }
-    }
-
-    const POSSIBLE_EXTENSIONS: [&str; 2] = [".png", ".svg"];
-
-    for path in possible_locations.iter() {
-        let mut path = path.clone();
-        path.push_str("/");
-        path.push_str(name);
-        for extension in POSSIBLE_EXTENSIONS.iter() {
-            let mut path = path.clone();
-            path.push_str(extension);
-
-            let i = icon::from_file(&path);
-            if i.is_some() {
-                return i;
-            }
-        }
-    }
-    return None;
-}
-
-fn is_cli_app(name: &String) -> bool {
-    matches!(
-        name.as_str(),
-        "ls" | "cd"
-            | "cat"
-            | "rm"
-            | "mv"
-            | "cp"
-            | "mkdir"
-            | "rmdir"
-            | "touch"
-            | "ed"
-            | "if"
-            | "then"
-            | "else"
-            | "fi"
-            | "for"
-            | "do"
-            | "done"
-            | "while"
-            | "until"
-            | "case"
-            | "esac"
-            | "vim"
-            | "nano"
-            | "ghc"
-            | "ghci"
-            | "ghcup"
-            | "cabal"
-            | "rustc"
-            | "cargo"
-            | "clang"
-            | "clang++"
-            | "gcc"
-            | "g++"
-            | "make"
-            | "node"
-            | "npm"
-            | "yarn"
-            | "pnpm"
-            | "npx"
-            | "python"
-            | "python3"
-            | "pip"
-            | "pip3"
-            | "ruby"
-            | "gem"
-            | "java"
-            | "javac"
-            | "jshell"
-            | "javadoc"
-            | "jlink"
-            | "jpackage"
-            | "jdeps"
-            | "jmod"
-            | "jdb"
-            | "jconsole"
-            | "git"
-            | "gitk"
-            | "pacman"
-            | "yay"
-            | "paru"
-            | "apt"
-            | "apt-get"
-            | "tar"
-            | "unzip"
-            | "zip"
-            | "unrar"
-            | "rar"
-            | "7z"
-            | "zstd"
-            | "gzip"
-            | "gunzip"
-            | "atool"
-            | "neofetch"
-            | "julia"
-            | "nvim"
-            | "emacs"
-            | "htop"
-            | "top"
-            | "btop"
-            | "nmtui"
-            | "nmcli"
-            | "ip"
-            | "ipconfig"
-            | "ifconfig"
-            | "gdb"
-            | "ld"
-            | "alias"
-            | "kill"
-            | "pkill"
-            | "find"
-            | "tree"
-            | "sudo"
-            | "su"
-            | "chown"
-            | "chmod"
-            | "grep"
-            | "sed"
-    )
 }
 
 fn get_list() -> Result<Vec<String>, ()> {
