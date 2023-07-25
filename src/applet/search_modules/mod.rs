@@ -1,6 +1,6 @@
 use crate::BoxedRuntime;
 use async_trait::async_trait;
-use prober::config::CONF;
+use glimpse::config::CONF;
 
 pub struct SearchResult {
     pub render: Box<dyn Fn() -> gtk::Box>,

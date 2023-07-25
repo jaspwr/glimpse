@@ -1,4 +1,4 @@
-use prober::indexing;
+use glimpse::indexing;
 use savefile_derive::Savefile;
 use std::collections::HashMap;
 

@@ -3,7 +3,7 @@ use std::{collections::HashMap, fs::DirEntry, path::PathBuf};
 use docx_rs::*;
 use lopdf::Document;
 
-use prober::{
+use glimpse::{
     config::CONF,
     indexing::{tokenize_string, Index},
 };

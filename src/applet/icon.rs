@@ -2,7 +2,7 @@ use std::fs;
 
 use gdk::gdk_pixbuf;
 use gtk::traits::IconThemeExt;
-use prober::config::CONF;
+use glimpse::config::CONF;
 
 use crate::utils::is_cli_app;
 

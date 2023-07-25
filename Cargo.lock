@@ -752,6 +752,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "glimpse"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "docx-rs",
+ "execute",
+ "futures",
+ "gdk",
+ "gdk-sys",
+ "gtk",
+ "home",
+ "http",
+ "infer",
+ "lopdf",
+ "once_cell",
+ "pango",
+ "rand",
+ "reqwest",
+ "savefile",
+ "savefile-derive",
+ "serde",
+ "serde_json",
+ "serde_toml",
+ "sqlite",
+ "tokio",
+ "toml",
+ "url",
+]
+
+[[package]]
 name = "gobject-sys"
 version = "0.17.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1397,37 +1428,6 @@ name = "ppv-lite86"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b40af805b3121feab8a3c29f04d8ad262fa8e0561883e7653e024ae4479e6de"
-
-[[package]]
-name = "prober"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "bytes",
- "docx-rs",
- "execute",
- "futures",
- "gdk",
- "gdk-sys",
- "gtk",
- "home",
- "http",
- "infer",
- "lopdf",
- "once_cell",
- "pango",
- "rand",
- "reqwest",
- "savefile",
- "savefile-derive",
- "serde",
- "serde_json",
- "serde_toml",
- "sqlite",
- "tokio",
- "toml",
- "url",
-]
 
 [[package]]
 name = "proc-macro-crate"

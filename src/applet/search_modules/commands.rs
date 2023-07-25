@@ -5,7 +5,7 @@ use std::{
 
 use async_trait::async_trait;
 use execute::Execute;
-use prober::config::CONF;
+use glimpse::config::CONF;
 
 use crate::{
     exec::execute_detached,

@@ -19,7 +19,7 @@ pub static CONF: Lazy<Config> = Lazy::new(|| match load_config() {
 });
 
 pub static CONF_FILE_PATH: Lazy<PathBuf> = Lazy::new(|| {
-    let path = home::home_dir().unwrap().join(".config").join("prober").join("config.toml");
+    let path = home::home_dir().unwrap().join(".config").join("glimpse").join("config.toml");
 
     if !path.exists() {
         std::fs::create_dir_all(&path).unwrap();
@@ -92,7 +92,7 @@ pub struct Indexing {
 
 pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
     if let Some(home) = home::home_dir() {
-        let config_path = home.join(".config").join("prober").join("config.toml");
+        let config_path = home.join(".config").join("glimpse").join("config.toml");
 
         if let Ok(file) = std::fs::File::open(config_path.clone()) {
             let file = BufReader::new(file);
@@ -128,7 +128,7 @@ pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
 
 fn create_new_config_file(home: PathBuf, config_path: PathBuf) -> Result<Config, Box<dyn Error>> {
     let mut default_config = Config::default();
-    let indexing_location = home.join(".cache").join("prober");
+    let indexing_location = home.join(".cache").join("glimpse");
     let indexing_location = indexing_location.to_str();
     default_config.indexing.location = match indexing_location {
         Some(location) => String::from(location),
@@ -140,7 +140,7 @@ fn create_new_config_file(home: PathBuf, config_path: PathBuf) -> Result<Config,
         }
     };
     let toml = toml::to_string(&default_config)?;
-    let config_folder = home.join(".config").join("prober");
+    let config_folder = home.join(".config").join("glimpse");
     std::fs::create_dir_all(config_folder)?;
     std::fs::write(config_path, toml)?;
     Ok(default_config)

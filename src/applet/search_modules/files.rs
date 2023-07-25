@@ -1,7 +1,7 @@
 use std::{path::PathBuf, sync::Arc};
 
 use async_trait::async_trait;
-use prober::{
+use glimpse::{
     config::CONF,
     indexing::{tokenize_string, Index},
 };

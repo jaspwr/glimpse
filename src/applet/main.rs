@@ -20,7 +20,7 @@ mod utils;
 
 static CONTROL: AtomicBool = AtomicBool::new(false);
 
-use prober::config::{CONF, CONF_FILE_PATH};
+use glimpse::config::{CONF, CONF_FILE_PATH};
 use search_modules::{SearchModule, SearchResult};
 
 pub static RUNTIME: Lazy<BoxedRuntime> = Lazy::new(|| {
@@ -37,7 +37,7 @@ pub type BoxedRuntime = Arc<Mutex<tokio::runtime::Runtime>>;
 
 fn main() {
     let application = gtk::Application::builder()
-        .application_id("com.jaspwr.Prober")
+        .application_id("com.jaspwr.glimpse")
         .build();
 
     application.connect_activate(|app| {
@@ -46,7 +46,7 @@ fn main() {
 
         let window = gtk::ApplicationWindow::builder()
             .application(app)
-            .title("Prober")
+            .title("glimpse")
             .default_width(width)
             .default_height(1)
             .resizable(false)

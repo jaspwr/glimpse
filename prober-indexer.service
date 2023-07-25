@@ -1,8 +1,8 @@
 [Unit]
-Description=prober-indexer
+Description=glimpse-indexer
 
 [Service]
-ExecStart=/home/jasper/dev/prober/target/release/prober-indexer
+ExecStart=/home/jasper/dev/glimpse/target/release/glimpse-indexer
 Type=oneshot
 RemainAfterExit=yes
 

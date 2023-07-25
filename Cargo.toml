@@ -1,14 +1,14 @@
 [package]
-name = "prober"
+name = "glimpse"
 version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "prober"
+name = "glimpse"
 path = "src/applet/main.rs"
 
 [[bin]]
-name = "prober-indexer"
+name = "glimpse-indexer"
 path = "src/indexer/main.rs"
 
 # [profile.release]
