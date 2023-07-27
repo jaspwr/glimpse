@@ -7,7 +7,7 @@ use gtk::{
     Scrollable, subclass::{container, scrolled_window}, DrawingArea,
 };
 use pango::{WrapMode, glib::idle_add_once};
-use poppler::PopplerDocument;
+// use poppler::PopplerDocument;
 
 use crate::prelude::Trunc;
 
@@ -81,7 +81,7 @@ impl PreviewWindow {
     }
 }
 
-fn create_file_preview_widget(container_cpy: Arc<Mutex<SafeBox>>, prev: PreviewWindowContents, path: PathBuf) {
+fn create_file_preview_widget(container_cpy: Arc<Mutex<SafeBox>>, prev: PreviewWindowContents, path: PathBuf) -> Option<()> {
     let container = container_cpy.clone();
     let container = container.lock().unwrap();
 
@@ -93,7 +93,7 @@ fn create_file_preview_widget(container_cpy: Arc<Mutex<SafeBox>>, prev: PreviewW
 
     container.container.add(&match prev {
         PreviewWindowContents::None => unreachable!(),
-        PreviewWindowContents::Image(path) => load_image(&path).unwrap(),
+        PreviewWindowContents::Image(path) => load_image(&path)?,
         PreviewWindowContents::TextFile(text, _) => plain_text_preview(text),
         PreviewWindowContents::Directory(path) => dir_listing(&path),
         PreviewWindowContents::Error(text) => plain_text_preview(text),
@@ -106,6 +106,7 @@ fn create_file_preview_widget(container_cpy: Arc<Mutex<SafeBox>>, prev: PreviewW
     container.container.add(&label);
 
     container.container.show_all();
+    Some(())
 }
 
 async fn trunc_long_lines(text: String) -> String {
