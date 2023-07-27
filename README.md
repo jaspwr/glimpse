@@ -32,6 +32,9 @@ After running for the first time, a configuration file should be created at `~/.
 ## Dependencies
 * GTK3
 * sqlite3
+* xdg-utils
+* bash
+* coreutils
 
 ### Make
 * Rust & Cargo
