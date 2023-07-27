@@ -41,7 +41,20 @@ static DEFAULT_CSS: &str = ".search-field {}
 
 .result-subtext {}
 
-.result-icon {}";
+.result-icon {}
+
+.odd-row {}
+
+.even-row {}
+
+scrollbar {}
+
+scrollbar slider {}
+
+.preview-window {}
+
+.preview-text {}
+";
 
 pub static CSS: Lazy<String> = Lazy::new(|| {
     let css_path = CONF_FILE_PATH.parent().unwrap().join("style.css");
@@ -68,6 +81,7 @@ pub struct Config {
     pub ignore_directories: Vec<String>,
     pub visual: Visual,
     pub window: Window,
+    pub preview_window: PreviewWindow,
     pub misc: Misc,
 }
 
@@ -115,6 +129,16 @@ pub struct Indexing {
     pub location: String,
     pub size_upper_bound_GiB: f32,
 }
+
+#[derive(Serialize, Deserialize)]
+pub struct PreviewWindow {
+    pub enabled: bool,
+    pub show_automatically: bool,
+    pub show_on_key: String,
+    pub width: u32,
+    pub image_size: u32,
+}
+
 
 pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
     if let Some(home) = home::home_dir() {
@@ -216,6 +240,13 @@ impl Default for Config {
             window: Window {
                 width: 420,
                 height: 400,
+            },
+            preview_window: PreviewWindow {
+                enabled: true,
+                show_automatically: true,
+                show_on_key: String::from("Tab"),
+                width: 420,
+                image_size: 350
             },
             misc: Misc {
                 display_command_paths: false,

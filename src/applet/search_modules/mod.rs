@@ -1,4 +1,4 @@
-use crate::BoxedRuntime;
+use crate::{BoxedRuntime, preview_window::PreviewWindowShowing};
 use async_trait::async_trait;
 use glimpse::config::CONF;
 
@@ -7,6 +7,7 @@ pub struct SearchResult {
     pub relevance: f32,
     pub on_select: Option<Box<dyn Fn() + Sync + Send>>,
     pub id: u64,
+    pub preview_window_data: PreviewWindowShowing
 }
 
 unsafe impl Send for SearchResult {}

@@ -28,6 +28,7 @@ impl SearchModule for Calculator {
                 id: 0xab1489fd,
                 on_select: None,
                 render,
+                preview_window_data: crate::preview_window::PreviewWindowShowing::None,
             }]
         } else {
             vec![]

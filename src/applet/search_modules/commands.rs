@@ -74,6 +74,7 @@ impl Commands {
             relevance,
             id,
             on_select: Some(Box::new(run)),
+            preview_window_data: crate::preview_window::PreviewWindowShowing::None,
         }
     }
 }

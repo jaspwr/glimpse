@@ -7,12 +7,13 @@ use biases::increment_bias;
 use futures::{future::abortable, stream::AbortHandle};
 use gdk::glib::once_cell::sync::Lazy;
 use gdk::{glib::idle_add_once, SeatCapabilities};
-use gtk::prelude::*;
+use gtk::{prelude::*, subclass::container};
 
 mod biases;
 mod exec;
 mod icon;
 mod prelude;
+mod preview_window;
 mod result_templates;
 mod search;
 mod search_modules;
@@ -21,6 +22,7 @@ mod utils;
 static CONTROL: AtomicBool = AtomicBool::new(false);
 
 use glimpse::config::{CONF, CONF_FILE_PATH, CSS};
+use preview_window::{PreviewWindowShowing, SafeBox};
 use search_modules::{SearchModule, SearchResult};
 
 pub static RUNTIME: Lazy<BoxedRuntime> = Lazy::new(|| {
@@ -67,12 +69,21 @@ fn main() {
 
         window.move_(win_x, win_y);
 
+        let preview_window_container = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        preview_window_container.style_context().add_class("preview-window");
+
+        let preview_window = Arc::new(tokio::sync::Mutex::new(preview_window::PreviewWindow {
+            container: Arc::new(Mutex::new(SafeBox { container: preview_window_container})),
+            showing: preview_window::PreviewWindowShowing::None,
+        }));
+
         let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
         container.style_context().add_class("outer-container");
 
         let list = gtk::ListBox::new();
         list.style_context().add_class("results-list");
         list.set_selection_mode(gtk::SelectionMode::Browse);
+
 
         let search_field = gtk::Entry::new();
 
@@ -94,7 +105,6 @@ fn main() {
         container.add(&scrolled_window);
 
         let boxed_scrolled_window = Arc::new(scrolled_window);
-
 
         if CONF.visual.result_borders {
             if CONF.visual.dark_result_borders {
@@ -133,9 +143,9 @@ fn main() {
             create_err_msg(error_title, err, &container);
         }
 
-        let err_style_provider = gtk::CssProvider::new();
+        let misc_style_provider = gtk::CssProvider::new();
         #[rustfmt::skip]
-        err_style_provider.load_from_data(".error-title {
+        misc_style_provider.load_from_data(".error-title {
             color: red;
             font-weight: bold;
         }
@@ -143,8 +153,19 @@ fn main() {
         .error-details {
             color: red;
             font-family: monospace, monospace;
-        }".as_bytes()).unwrap();
-        add_style_provider(err_style_provider);
+        }
+
+        .preview-window {
+            padding: 20px;
+        }
+
+        .preview-text {
+            background-color: rgba(0,0,0,.1);
+            font-family: monospace, monospace;
+            font-size: 12px;
+        }
+        ".as_bytes()).unwrap();
+        add_style_provider(misc_style_provider);
 
         let list = Arc::new(Mutex::new(SafeListBox { list }));
 
@@ -154,14 +175,15 @@ fn main() {
 
         let current_task_handle: Arc<Mutex<Vec<AbortHandle>>> = Arc::new(Mutex::new(vec![]));
 
+        search_field.set_width_request(CONF.window.width as i32);
+
         let current_task_handle_cpy = current_task_handle.clone();
         let rt_cpy = rt.clone();
+        let preview_window_cpy = preview_window.clone();
         search_field.connect_changed(move |entry| {
-            if entry.text().is_empty() {
-                boxed_scrolled_window.clone().hide();
-            } else {
-                boxed_scrolled_window.clone().show_all();
-            }
+            let visible = entry.text().is_empty();
+            let rt = rt_cpy.clone();
+            let preview_window = preview_window_cpy.clone();
 
             let current_task_handle = current_task_handle_cpy.clone();
             {
@@ -171,6 +193,8 @@ fn main() {
                 }
                 (*current_task_handle).clear()
             }
+
+            set_visibility(visible, boxed_scrolled_window.clone(), preview_window, rt.clone());
 
             {
                 let list = list_cpy.lock().unwrap();
@@ -182,7 +206,6 @@ fn main() {
             }
 
             let list = list_cpy.clone();
-            let rt = rt_cpy.clone();
             let query = entry.text().to_string();
 
             perform_search(query, list, current_task_handle, rt);
@@ -243,7 +266,27 @@ fn main() {
                 Inhibit(false)
             });
 
-        window.set_child(Some(&container));
+
+        if CONF.preview_window.enabled {
+            let grid = gtk::Grid::new();
+            grid.attach(&container, 0, 0, 1, 1);
+            // TODO: Make side configurable
+            let preview_window = rt.lock().unwrap().block_on(preview_window.lock());
+            let prev_container = preview_window.container.lock().unwrap();
+            grid.attach_next_to(&prev_container.container, Some(&container), gtk::PositionType::Right, 1, 1);
+
+            window.set_child(Some(&grid));
+
+            grid.show();
+        } else {
+            window.set_child(Some(&container));
+        }
+
+        let preview_window_cpy = preview_window.clone();
+        if CONF.preview_window.enabled {
+            connect_preview_events(&rt, &current_task_handle, &list, preview_window_cpy);
+        }
+
 
         container.show();
         window.show();
@@ -266,6 +309,77 @@ fn main() {
     application.run();
 }
 
+fn connect_preview_events(
+    rt: &Arc<Mutex<tokio::runtime::Runtime>>,
+    current_task_handle: &Arc<Mutex<Vec<AbortHandle>>>,
+    list: &Arc<Mutex<SafeListBox>>,
+    preview_window_cpy: Arc<tokio::sync::Mutex<preview_window::PreviewWindow>>,
+) {
+    let rt_cpy = rt.clone();
+    let current_task_handle_cpy = current_task_handle.clone();
+    list.lock()
+        .unwrap()
+        .list
+        .connect_selected_rows_changed(move |list| {
+            let rt = rt_cpy.clone();
+            let preview_window = preview_window_cpy.clone();
+            let selected_rows = list.selected_rows();
+            let current_task_handle = current_task_handle_cpy.clone();
+            if selected_rows.len() == 1 {
+                let row = &selected_rows[0];
+                use_entry_data(
+                    row,
+                    Box::new(move |data| {
+                        let rt = rt.clone();
+                        let rt = rt.lock().unwrap();
+                        let current_task_handle = current_task_handle.clone();
+
+                        let preview_window = preview_window.clone();
+
+                        let preview_window_data = data.preview_window_data.clone();
+
+                        let (task, handle) = abortable(async move {
+                            let preview_window = preview_window.clone();
+                            let mut preview_window = preview_window.lock().await;
+                            preview_window.set(preview_window_data).await;
+                        });
+
+                        current_task_handle.lock().unwrap().push(handle);
+
+                        rt.spawn(task);
+                    }),
+                );
+            } else {
+                let rt = rt.lock().unwrap();
+
+                let (task, handle) = abortable(async move {
+                    let preview_window = preview_window.clone();
+                    let mut preview_window = preview_window.lock().await;
+                    preview_window.set(PreviewWindowShowing::None).await;
+                });
+
+                current_task_handle.lock().unwrap().push(handle);
+
+                rt.spawn(task);
+            }
+        });
+}
+
+fn set_visibility(
+    visible: bool,
+    boxed_scrolled_window: Arc<gtk::ScrolledWindow>,
+    preview_window: Arc<tokio::sync::Mutex<preview_window::PreviewWindow>>,
+    rt: BoxedRuntime,
+) {
+    let mut preview_window = rt.lock().unwrap().block_on(preview_window.lock());
+    if visible {
+        preview_window.hide();
+        boxed_scrolled_window.clone().hide();
+    } else {
+        boxed_scrolled_window.clone().show_all();
+    }
+}
+
 fn add_style_provider(style_provider: gtk::CssProvider) {
     let screen = gdk::Screen::default().unwrap();
     gtk::StyleContext::add_provider_for_screen(
@@ -286,7 +400,6 @@ fn create_err_msg(error_title: String, err_msg: &String, container: &gtk::Box) {
     error_title.style_context().add_class("error-title");
     container.add(&error_title);
     error_title.show();
-
 
     let error_details = gtk::Label::new(Some(err_msg));
     error_details.style_context().add_class("error-details");
@@ -405,9 +518,7 @@ fn handle_search_field_keypress(key: gdk::keys::Key, list: Arc<Mutex<SafeListBox
         return;
     }
 
-    if key == gdk::keys::constants::Escape {
-        std::process::exit(0);
-    }
+    global_keypress_handler(key);
 
     if key == gdk::keys::constants::Return {
         let first_entry = {
@@ -421,14 +532,33 @@ fn handle_search_field_keypress(key: gdk::keys::Key, list: Arc<Mutex<SafeListBox
     }
 }
 
+fn global_keypress_handler(key: gdk::keys::Key) {
+    if key == gdk::keys::constants::Escape {
+        std::process::exit(0);
+    }
+
+    if CONF.preview_window.enabled
+        && !CONF.preview_window.show_automatically
+        && key == to_gdk_key(&CONF.preview_window.show_on_key)
+    {
+        println!("aaaa");
+    }
+}
+
+fn to_gdk_key(str_name: &String) -> gdk::keys::Key {
+    // TODO: Do this a better way.
+    match str_name.as_str() {
+        "Tab" => gdk::keys::constants::Tab,
+        _ => gdk::keys::constants::Tab,
+    }
+}
+
 fn handle_list_keypress(key: gdk::keys::Key, search_field: Arc<gtk::Entry>, list: &gtk::ListBox) {
     if key == gdk::keys::constants::Control_L || key == gdk::keys::constants::Control_R {
         CONTROL.store(true, Ordering::Relaxed);
     }
 
-    if key == gdk::keys::constants::Escape {
-        std::process::exit(0);
-    }
+    global_keypress_handler(key);
 
     if key == gdk::keys::constants::Return {
         return;
@@ -525,6 +655,7 @@ pub async fn append_results(results: Vec<SearchResult>, list: Arc<std::sync::Mut
                 relevance: result.relevance,
                 id: result.id,
                 action: result.on_select,
+                preview_window_data: result.preview_window_data,
             };
 
             unsafe {
@@ -543,6 +674,16 @@ pub async fn append_results(results: Vec<SearchResult>, list: Arc<std::sync::Mut
                 list.list.select_row(Some(&first_row));
             }
             (*FAKE_FIRST_SELECTED.lock().unwrap()) = true;
+        }
+
+        for (row, i) in list.list.children().into_iter().zip(0..) {
+            if i % 2 == 0 {
+                row.style_context().remove_class("odd-row");
+                row.style_context().add_class("even-row");
+            } else {
+                row.style_context().remove_class("even-row");
+                row.style_context().add_class("odd-row");
+            }
         }
     });
 }
@@ -584,6 +725,7 @@ struct ResultData {
     relevance: f32,
     id: u64,
     action: Option<Box<dyn Fn() -> () + Sync + Send>>,
+    preview_window_data: PreviewWindowShowing,
 }
 
 #[inline]

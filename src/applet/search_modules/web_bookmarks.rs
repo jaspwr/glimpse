@@ -95,6 +95,7 @@ impl WebBookmarks {
             relevance,
             id: id_hash(name),
             on_select: Some(Box::new(on_select)),
+            preview_window_data: crate::preview_window::PreviewWindowShowing::None,
         }
     }
 }

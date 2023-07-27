@@ -158,5 +158,6 @@ fn create_result(response: String, relevance: f32) -> Option<SearchResult> {
         relevance,
         id,
         on_select: None,
+        preview_window_data: crate::preview_window::PreviewWindowShowing::None,
     })
 }
