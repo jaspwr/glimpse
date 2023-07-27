@@ -1,0 +1,14 @@
+[Unit]
+Description=glimpse-indexer
+
+[Service]
+ExecStart=/usr/local/bin/glimpse-indexer
+Type=oneshot
+RemainAfterExit=yes
+
+[Timer]
+OnCalendar=daily
+AccuracySec=1h
+
+[Install]
+WantedBy=multi-user.target

@@ -28,6 +28,32 @@ pub static CONF_FILE_PATH: Lazy<PathBuf> = Lazy::new(|| {
     path
 });
 
+#[rustfmt::skip]
+static DEFAULT_CSS: &str = ".search-field {}
+
+.outer-container {}
+
+.results-list {}
+
+.result-box {}
+
+.result-title {}
+
+.result-subtext {}
+
+.result-icon {}";
+
+pub static CSS: Lazy<String> = Lazy::new(|| {
+    let css_path = CONF_FILE_PATH.parent().unwrap().join("style.css");
+
+    if !css_path.exists() {
+        let _ = fs::write(&css_path, DEFAULT_CSS);
+        DEFAULT_CSS.to_string()
+    } else {
+        fs::read_to_string(&css_path).unwrap()
+    }
+});
+
 #[derive(Serialize, Deserialize)]
 pub struct Config {
     #[serde(skip)]

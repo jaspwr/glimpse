@@ -20,7 +20,7 @@ mod utils;
 
 static CONTROL: AtomicBool = AtomicBool::new(false);
 
-use glimpse::config::{CONF, CONF_FILE_PATH};
+use glimpse::config::{CONF, CONF_FILE_PATH, CSS};
 use search_modules::{SearchModule, SearchResult};
 
 pub static RUNTIME: Lazy<BoxedRuntime> = Lazy::new(|| {
@@ -68,8 +68,10 @@ fn main() {
         window.move_(win_x, win_y);
 
         let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        container.style_context().add_class("outer-container");
 
         let list = gtk::ListBox::new();
+        list.style_context().add_class("results-list");
         list.set_selection_mode(gtk::SelectionMode::Browse);
 
         let search_field = gtk::Entry::new();
@@ -93,23 +95,56 @@ fn main() {
 
         let boxed_scrolled_window = Arc::new(scrolled_window);
 
-        let style_provider = gtk::CssProvider::new();
 
         if CONF.visual.result_borders {
             if CONF.visual.dark_result_borders {
+                let style_provider = gtk::CssProvider::new();
                 #[rustfmt::skip]
                 style_provider.load_from_data(
                     ".outlined-container {
                         border-bottom: 1px solid rgba(0,0,0,.1);
                     }".as_bytes(),).unwrap();
+                add_style_provider(style_provider);
             } else {
+                let style_provider = gtk::CssProvider::new();
                 #[rustfmt::skip]
                 style_provider.load_from_data(
                     ".outlined-container {
                         border-bottom: 1px solid rgba(255,255,255,.1);
                     }".as_bytes(),).unwrap();
+                add_style_provider(style_provider);
             }
         }
+
+        let custom_style_provider = gtk::CssProvider::new();
+        if let Err(err) = custom_style_provider.load_from_data(CSS.as_bytes()) {
+            let error_title = format!("Error loading style; using default style. Either correct the errors or delete the style file to have a new one generated. Your style file is located at: \"{}\"",
+                CONF_FILE_PATH.parent().unwrap().join("style.css").to_str().unwrap());
+
+            create_err_msg(error_title, &err.to_string(), &container);
+        } else {
+            add_style_provider(custom_style_provider);
+        }
+
+        if let Some(err) = CONF.error.as_ref() {
+            let error_title = format!("Error loading config; using default config. Either correct the errors or delete the config file to have a new one generated. Your config file is located at: \"{}\"",
+                CONF_FILE_PATH.to_str().unwrap());
+
+            create_err_msg(error_title, err, &container);
+        }
+
+        let err_style_provider = gtk::CssProvider::new();
+        #[rustfmt::skip]
+        err_style_provider.load_from_data(".error-title {
+            color: red;
+            font-weight: bold;
+        }
+
+        .error-details {
+            color: red;
+            font-family: monospace, monospace;
+        }".as_bytes()).unwrap();
+        add_style_provider(err_style_provider);
 
         let list = Arc::new(Mutex::new(SafeListBox { list }));
 
@@ -180,6 +215,7 @@ fn main() {
             });
 
         let search_field = Arc::new(search_field);
+        search_field.style_context().add_class("search-field");
 
         let search_field_cpy = search_field.clone();
 
@@ -207,47 +243,7 @@ fn main() {
                 Inhibit(false)
             });
 
-        if let Some(err) = CONF.error.as_ref() {
-            #[rustfmt::skip]
-            style_provider.load_from_data(".error-title {
-                color: red;
-                font-weight: bold;
-            }
-
-            .error-details {
-                color: red;
-                font-family: monospace, monospace;
-            }".as_bytes()).unwrap();
-
-            let error_title = format!("Error loading config; using default config. Either correct the errors or delete the config file to have a new one generated. Your config file is located at: \"{}\"",
-                CONF_FILE_PATH.to_str().unwrap());
-
-            let error_title = gtk::Label::new(Some(&error_title.as_str()));
-
-            error_title.set_halign(gtk::Align::Start);
-            error_title.set_line_wrap(true);
-            error_title.set_line_wrap_mode(pango::WrapMode::WordChar);
-            error_title.set_max_width_chars(40);
-
-            error_title.style_context().add_class("error-title");
-            container.add(&error_title);
-            error_title.show();
-
-
-            let error_details = gtk::Label::new(Some(err));
-            error_details.style_context().add_class("error-details");
-            container.add(&error_details);
-            error_details.show();
-        }
-
         window.set_child(Some(&container));
-
-        let screen = gdk::Screen::default().unwrap();
-        gtk::StyleContext::add_provider_for_screen(
-            &screen,
-            &style_provider,
-            gtk::STYLE_PROVIDER_PRIORITY_USER,
-        );
 
         container.show();
         window.show();
@@ -268,6 +264,34 @@ fn main() {
     });
 
     application.run();
+}
+
+fn add_style_provider(style_provider: gtk::CssProvider) {
+    let screen = gdk::Screen::default().unwrap();
+    gtk::StyleContext::add_provider_for_screen(
+        &screen,
+        &style_provider,
+        gtk::STYLE_PROVIDER_PRIORITY_USER,
+    );
+}
+
+fn create_err_msg(error_title: String, err_msg: &String, container: &gtk::Box) {
+    let error_title = gtk::Label::new(Some(&error_title.as_str()));
+
+    error_title.set_halign(gtk::Align::Start);
+    error_title.set_line_wrap(true);
+    error_title.set_line_wrap_mode(pango::WrapMode::WordChar);
+    error_title.set_max_width_chars(40);
+
+    error_title.style_context().add_class("error-title");
+    container.add(&error_title);
+    error_title.show();
+
+
+    let error_details = gtk::Label::new(Some(err_msg));
+    error_details.style_context().add_class("error-details");
+    container.add(&error_details);
+    error_details.show();
 }
 
 fn perform_search(
@@ -494,6 +518,8 @@ pub async fn append_results(results: Vec<SearchResult>, list: Arc<std::sync::Mut
             if CONF.visual.result_borders {
                 row.style_context().add_class("outlined-container");
             }
+
+            row.style_context().add_class("result-box");
 
             let data = ResultData {
                 relevance: result.relevance,
