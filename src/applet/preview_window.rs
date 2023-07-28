@@ -1,15 +1,12 @@
-use std::{path::{Path, PathBuf}, sync::{Mutex, Arc}};
+use std::{path::PathBuf, sync::{Mutex, Arc}};
 
-use gdk::{gdk_pixbuf, cairo::{self, Context}};
+use gdk::gdk_pixbuf;
 use glimpse::config::CONF;
-use gtk::{
-    traits::{ContainerExt, WidgetExt, ScrolledWindowExt, LabelExt, GridExt, StyleContextExt},
-    Scrollable, subclass::{container, scrolled_window}, DrawingArea,
-};
+use gtk::traits::{ContainerExt, WidgetExt, ScrolledWindowExt, LabelExt, GridExt, StyleContextExt};
 use pango::{WrapMode, glib::idle_add_once};
 // use poppler::PopplerDocument;
 
-use crate::prelude::Trunc;
+use glimpse::prelude::*;
 
 pub struct PreviewWindow {
     pub container: Arc<Mutex<SafeBox>>,
@@ -59,13 +56,6 @@ impl PreviewWindow {
                 todo!()
             },
         }
-    }
-
-    pub async fn show(&mut self) {
-        let container = self.container.clone();
-        idle_add_once(move || {
-            container.lock().unwrap().container.show_all();
-        });
     }
 
     pub fn hide(&mut self) {
@@ -209,6 +199,9 @@ async fn create_plain_text_file_preview(path: &PathBuf) -> Option<PreviewWindowC
 
 fn plain_text_preview(text: String) -> gtk::Box {
     let label = gtk::Label::new(Some(&text));
+    label.set_valign(gtk::Align::Start);
+    label.set_halign(gtk::Align::Start);
+
     let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
     let scrolled_window = create_scrolled_window();
     scrolled_window.add(&label);

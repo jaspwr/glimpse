@@ -12,7 +12,6 @@ use gtk::{prelude::*, subclass::container};
 mod biases;
 mod exec;
 mod icon;
-mod prelude;
 mod preview_window;
 mod result_templates;
 mod search;

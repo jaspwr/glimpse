@@ -1,6 +1,6 @@
 use gtk::traits::{ContainerExt, GridExt, WidgetExt, StyleContextExt};
 
-use crate::prelude::*;
+use glimpse::prelude::*;
 
 pub fn standard_entry(
     name: String,

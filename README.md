@@ -21,9 +21,7 @@ First ensure you have the [dependencies](#dependencies) installed. Then run the 
 ```bash
 $ git clone https://github.com/jaspwr/glimpse
 $ cd glimpse
-$ cargo build --release
-$ sudo cp target/release/glimpse /usr/local/bin
-$ sudo cp target/release/glimpse-indexer /usr/local/bin
+$ bash install.sh
 ```
 
 ## Configuration

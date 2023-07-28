@@ -3,7 +3,7 @@ use gtk::traits::{ContainerExt, LabelExt, WidgetExt};
 
 use super::{SearchModule, SearchResult};
 
-use super::super::prelude::*;
+use glimpse::prelude::*;
 
 pub struct Calculator {}
 

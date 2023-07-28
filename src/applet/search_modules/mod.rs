@@ -1,6 +1,6 @@
-use crate::{BoxedRuntime, preview_window::PreviewWindowShowing};
+use crate::{BoxedRuntime, preview_window::PreviewWindowShowing, exec::execute_detached};
 use async_trait::async_trait;
-use glimpse::config::CONF;
+use glimpse::{config::CONF, indexing};
 
 pub struct SearchResult {
     pub render: Box<dyn Fn() -> gtk::Box>,
@@ -40,7 +40,13 @@ pub fn load_standard_modules(rt: BoxedRuntime) -> Vec<BoxedSearchModule> {
     }
 
     if CONF.modules.files {
-        ret.push(Box::new(files::Files::new(rt.clone())));
+        if !indexing::is_locked() {
+            if hasnt_indexed_for_days(2) {
+                let _ = execute_detached("glimpse-indexer".to_string());
+            } else {
+                ret.push(Box::new(files::Files::new(rt.clone())));
+            }
+        }
     }
 
     if CONF.modules.calculator {
@@ -58,4 +64,11 @@ pub fn load_standard_modules(rt: BoxedRuntime) -> Vec<BoxedSearchModule> {
     }
 
     ret
+}
+
+fn hasnt_indexed_for_days(days: i64) -> bool {
+    let now = chrono::Utc::now().timestamp();
+    const HOUR: i64 = 60 * 60;
+    const DAY: i64 = HOUR * 24;
+    now - indexing::last_indexed().unwrap_or(0) > DAY * days
 }

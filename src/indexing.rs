@@ -1,9 +1,11 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, fs, io::Write, path::PathBuf};
 
+use chrono;
 use gdk::glib::once_cell::sync::Lazy;
 use savefile_derive::Savefile;
 
 use crate::config::CONF;
+use crate::prelude::*;
 
 pub static PATH: Lazy<PathBuf> = Lazy::new(|| {
     let path = PathBuf::from(CONF.indexing.location.clone());
@@ -15,6 +17,10 @@ pub static PATH: Lazy<PathBuf> = Lazy::new(|| {
     path
 });
 
+pub static LOCK_PATH: Lazy<PathBuf> = Lazy::new(|| PATH.join("lock"));
+
+pub static LAST_INDEXED_PATH: Lazy<PathBuf> = Lazy::new(|| PATH.join("last_indexed"));
+
 #[derive(Savefile)]
 pub struct Index {
     pub files: Vec<String>,
@@ -22,15 +28,64 @@ pub struct Index {
     pub tf_idf: HashMap<String, Vec<(PathBuf, f32)>>,
 }
 
+pub fn lock() -> Result<(), Box<dyn std::error::Error>> {
+    let mut lock_file = fs::File::create(LOCK_PATH.clone())?;
+    let time = format!("{}", chrono::Utc::now().timestamp());
+    lock_file.write_all(time.as_bytes())?;
+    Ok(())
+}
+
+pub fn unlock() {
+    let _ = fs::remove_file(LOCK_PATH.clone());
+}
+
+pub fn is_locked() -> bool {
+    if LOCK_PATH.exists() {
+        if let Some(value) = unlock_if_old() {
+            return value;
+        }
+        return true;
+    }
+
+    return false;
+}
+
+pub fn last_indexed() -> Option<i64> {
+    fs::read_to_string(LAST_INDEXED_PATH.clone())
+        .ok()
+        .bind(|s| s.parse::<i64>().ok())
+}
+
+pub fn set_last_indexed() {
+    let time = format!("{}", chrono::Utc::now().timestamp());
+    let _ = fs::write(LAST_INDEXED_PATH.clone(), time);
+}
+
+fn unlock_if_old() -> Option<bool> {
+    if let Ok(timestamp) = fs::read_to_string(LOCK_PATH.clone()) {
+        if let Ok(timestamp) = timestamp.parse::<i64>() {
+            const HOUR: i64 = 60 * 60;
+
+            let now = chrono::Utc::now().timestamp();
+            if now - timestamp > HOUR * 3 {
+                unlock();
+                return Some(false);
+            }
+        }
+    }
+    None
+}
+
 impl Index {
     pub fn save(&self, name: &str) {
         let path = PATH.join(name).with_extension("bin");
-        let mut file = std::fs::File::create(path).unwrap();
+        let mut file = fs::File::create(path).unwrap();
         savefile::save(&mut file, 0, self).unwrap();
+        set_last_indexed();
     }
 
     pub async fn load(name: &str) -> Option<Index> {
-        match std::fs::File::open(PATH.join(name).with_extension("bin")) {
+        match fs::File::open(PATH.join(name).with_extension("bin")) {
             Ok(mut file) => match savefile::load(&mut file, 0) {
                 Ok(index) => Some(index),
                 Err(_) => None,

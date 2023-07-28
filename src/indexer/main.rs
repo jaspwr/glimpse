@@ -5,11 +5,20 @@ use lopdf::Document;
 
 use glimpse::{
     config::CONF,
-    indexing::{tokenize_string, Index},
+    indexing::{tokenize_string, Index, self},
 };
 
 fn main() {
-    reindex();
+    if CONF.modules.files {
+        if indexing::is_locked() {
+            println!("Lock file exists, skipping indexing.");
+            return;
+        }
+
+        indexing::lock().expect("Failed to lock index.");
+        reindex();
+        indexing::unlock();
+    }
 }
 
 fn reindex() {

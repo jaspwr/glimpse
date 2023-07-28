@@ -17,6 +17,7 @@ path = "src/indexer/main.rs"
 [dependencies]
 async-trait = "0.1.71"
 bytes = "1.4.0"
+chrono = "0.4.26"
 docx-rs = "0.4.7"
 execute = "0.2.12"
 futures = "0.3.28"
