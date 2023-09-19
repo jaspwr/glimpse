@@ -24,6 +24,12 @@ struct GamesData {
     cased_game_names: HashMap<String, String>,
 }
 
+pub fn steam_folder_exists() -> bool {
+    let home = home::home_dir().unwrap();
+    let steamapps = home.join(".steam");
+    steamapps.exists()
+}
+
 #[async_trait]
 impl SearchModule for SteamGames {
     fn is_ready(&self) -> bool {

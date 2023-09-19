@@ -1,5 +1,5 @@
 use std::{
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::Arc,
 };
 
@@ -197,6 +197,7 @@ fn find_file_icon_name(ext: &str) -> &str {
         "deb" | "rpm" => "package-x-generic",
         "tex" => "text-x-tex",
         "toml" => "text-x-toml",
+        "jl" => "text-x-julia",
         _ => "text-x-generic",
     }
 }

@@ -415,12 +415,26 @@ fn perform_search(
     SEARCH_MODULES
         .iter()
         .filter(|module| module.is_ready())
-        .map(|module| module.search(query.clone(), 10))
-        .for_each(|f| {
+        .for_each(|module| {
+            let f = module.search(query.clone(), 10);
             let list = list.clone();
             let (task, handle) = abortable(async move {
+                let search_time_benchmark = if cfg!(debug_assertions) {
+                    Some(std::time::SystemTime::now())
+                } else {
+                    None
+                };
+
                 let results = f.await;
                 append_results(results, list.clone()).await;
+
+                if let Some(time) = search_time_benchmark {
+                    println!(
+                        "[{}] Search took: {:?}",
+                        module.name(),
+                        time.elapsed().unwrap()
+                    );
+                }
             });
             current_task_handle.lock().unwrap().push(handle);
             rt.lock().unwrap().spawn(task);

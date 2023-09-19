@@ -19,6 +19,9 @@ pub type BoxedSearchModule = Box<dyn SearchModule + Sync + Send>;
 pub trait SearchModule {
     fn is_ready(&self) -> bool;
     async fn search(&self, query: String, max_results: u32) -> Vec<SearchResult>;
+    fn name(&self) -> String {
+        std::any::type_name::<Self>().to_string()
+    }
 }
 
 mod calculator;
@@ -33,10 +36,6 @@ pub fn load_standard_modules(rt: BoxedRuntime) -> Vec<BoxedSearchModule> {
 
     if CONF.modules.commands {
         ret.push(Box::new(commands::Commands::new(rt.clone())));
-    }
-
-    if CONF.modules.steam_games {
-        ret.push(Box::new(steam_games::SteamGames::new(rt.clone())));
     }
 
     if CONF.modules.files {
@@ -61,6 +60,10 @@ pub fn load_standard_modules(rt: BoxedRuntime) -> Vec<BoxedSearchModule> {
         if CONF.modules.online_modules.dictionary {
             ret.push(Box::new(dictionary::Dictionary::new()));
         }
+    }
+
+    if CONF.modules.steam_games && steam_games::steam_folder_exists() {
+        ret.push(Box::new(steam_games::SteamGames::new(rt.clone())));
     }
 
     ret
