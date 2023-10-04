@@ -16,9 +16,9 @@ impl SearchModule for Calculator {
     async fn search(&self, query: String, _: u32) -> Vec<SearchResult> {
         #[rustfmt::skip]
         let solution = tokenize(&query)
-            .bind(swap_words)
-            .bind(execute)
-            .bind(fmt_number);
+            .and_then(swap_words)
+            .and_then(execute)
+            .and_then(fmt_number);
 
         if let Some(solution) = solution {
             let render = Box::new(move || render(solution.clone()));
@@ -219,25 +219,24 @@ fn try_consume(ts: &Tokens, matching: Token) -> Option<Tokens> {
 
 type PartialExpr = Option<(Tokens, f64)>;
 type ParserNode = fn(Tokens) -> PartialExpr;
-type ParserNodeClosure = Box<dyn Fn(Tokens) -> PartialExpr>;
 type Operation = fn(f64, f64) -> f64;
 
-fn first(l_node: ParserNode, r_node: ParserNode, operation: Operation) -> ParserNodeClosure {
-    Box::new(move |ts| {
+fn first(l_node: ParserNode, r_node: ParserNode, operation: Operation) -> impl Fn(Tokens) -> PartialExpr {
+    move |ts| {
         let (ts, left) = l_node(ts)?;
         let (ts, right) = r_node(ts)?;
         Some((ts, operation(left, right)))
-    })
+    }
 }
 
-fn follow(first: ParserNode, operator: Token, identity: f64) -> ParserNodeClosure {
-    Box::new(move |ts| {
+fn follow(first: ParserNode, operator: Token, identity: f64) -> impl Fn(Tokens) -> PartialExpr {
+    move |ts| {
         let operator = operator.clone();
         match try_consume(&ts, operator) {
             Some(ts) => first(ts),
             None => Some((ts, identity)),
         }
-    })
+    }
 }
 
 // TODO: Unary minus and plus
@@ -332,7 +331,7 @@ fn roll(dice_count: f64, dice_sides: f64) -> Option<f64> {
 fn brack(ts: Tokens) -> Option<(Tokens, f64)> {
     match try_consume(&ts, Token::Paren('(')) {
         Some(ts) => parse(ts)
-            .bind(|(ts, left)|
+            .and_then(|(ts, left)|
                 match try_consume(&ts, Token::Paren(')')) {
                     Some(ts) => Some((ts, left)),
                     None => None

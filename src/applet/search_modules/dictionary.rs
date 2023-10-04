@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use gtk::traits::{ContainerExt, GridExt, LabelExt, WidgetExt};
 
 use crate::utils;
+use glimpse::prelude::*;
 
 use super::{SearchModule, SearchResult};
 
@@ -73,20 +74,18 @@ fn create_result(response: String, relevance: f32) -> Option<SearchResult> {
         None => return None,
     };
 
-    let phonetics = match response[0]["phonetics"][1]["text"].as_str() {
-        Some(phonetics) => Some(phonetics.to_string()),
-        None => None, // Could really use a >>= right now
-    };
+    let phonetics = response[0]["phonetics"][1]["text"]
+        .as_str()
+        .and_then(|ph| Some(ph.to_string()));
 
     let part_of_speach = match response[0]["meanings"][0]["partOfSpeech"].as_str() {
         Some(particle_of_speach) => particle_of_speach.to_string(),
         None => "".to_string(),
     };
 
-    let definition = match response[0]["meanings"][0]["definitions"][0]["definition"].as_str() {
-        Some(definition) => definition.to_string(),
-        None => return None,
-    };
+    let definition = response[0]["meanings"][0]["definitions"][0]["definition"]
+        .as_str()?
+        .to_string();
 
     let id = utils::simple_hash(&word) + 0xa0a0a0a0;
 

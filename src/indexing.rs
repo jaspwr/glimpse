@@ -53,7 +53,7 @@ pub fn is_locked() -> bool {
 pub fn last_indexed() -> Option<i64> {
     fs::read_to_string(LAST_INDEXED_PATH.clone())
         .ok()
-        .bind(|s| s.parse::<i64>().ok())
+        .and_then(|s| s.parse::<i64>().ok())
 }
 
 pub fn set_last_indexed() {
