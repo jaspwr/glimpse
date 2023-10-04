@@ -4,7 +4,7 @@ use async_trait::async_trait;
 
 use crate::{
     exec::execute_detached, icon, result_templates::standard_entry, search::string_search,
-    utils::simple_hash, BoxedRuntime,
+    utils::{simple_hash, simple_hash_nonce, HashFn}, BoxedRuntime,
 };
 
 use super::{SearchModule, SearchResult};
@@ -42,6 +42,8 @@ impl SearchModule for SteamGames {
         let query = query.to_lowercase();
         let data = self.data.lock().await;
 
+        let hash_fn = simple_hash_nonce(std::any::type_name::<Self>());
+
         if data.is_none() {
             return vec![];
         }
@@ -50,24 +52,21 @@ impl SearchModule for SteamGames {
             &query,
             &data.as_ref().unwrap().game_names,
             max_results,
-            Box::new(id_hash),
+            &hash_fn,
             false,
         )
         .into_iter()
-        .map(|(s, r)| create_result(data.as_ref().unwrap(), s, r))
+        .map(|(n, r)| create_result(data.as_ref().unwrap(), &n, r, hash_fn(&*n)))
         .collect::<Vec<SearchResult>>()
     }
 }
 
-fn id_hash(name: &String) -> u64 {
-    simple_hash(name) + 0x0e0e00e0e00e
-}
 
-fn create_result(data: &GamesData, name: String, relevance: f32) -> SearchResult {
-    let id = *data.game_ids.get(&name).unwrap();
-    let cased_name = data.cased_game_names.get(&name).unwrap().clone();
+fn create_result(data: &GamesData, name: &String, relevance: f32, id: u64) -> SearchResult {
+    let steam_id = *data.game_ids.get(name).unwrap();
+    let cased_name = data.cased_game_names.get(name).unwrap().clone();
     let render = move || {
-        let icon = find_icon(id);
+        let icon = find_icon(steam_id);
         standard_entry(cased_name.clone(), icon, None)
     };
 
@@ -79,7 +78,7 @@ fn create_result(data: &GamesData, name: String, relevance: f32) -> SearchResult
     SearchResult {
         render: Box::new(render),
         relevance,
-        id: id_hash(&name),
+        id,
         on_select: Some(Box::new(on_select)),
         preview_window_data: crate::preview_window::PreviewWindowShowing::None,
     }

@@ -23,39 +23,43 @@ impl SearchModule for Dictionary {
         // wait 0.5 seconds to allow the user to type more
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
-        let mut query = query.to_lowercase();
-        let mut relevance: f32 = 1.5;
-
-        if query.len() == 0 {
-            return vec![];
-        }
-
-        if query.starts_with("define ") {
-            query = query.replace("define ", "");
-            relevance += 2.0;
-        } else if query.ends_with(" meaning") {
-            query = query.replace(" meaning", "");
-            relevance += 2.0;
-        } else if query.ends_with(" definition") {
-            query = query.replace(" definition", "");
-            relevance += 2.0;
-        }
-
-        for c in query.chars() {
-            if !c.is_alphanumeric() {
-                return vec![];
-            }
-        }
-
-        #[rustfmt::skip]
-        let body = reqwest::get(format!("https://api.dictionaryapi.dev/api/v2/entries/en/{}", query))
-            .await.unwrap().text().await.unwrap();
-
-        match create_result(body, relevance) {
+        match try_fetch(query).await {
             Some(result) => vec![result],
             None => vec![],
         }
     }
+}
+
+async fn try_fetch(query: String) -> Option<SearchResult> {
+    let mut query = query.to_lowercase();
+    let mut relevance: f32 = 1.5;
+
+    if query.len() == 0 {
+        return None;
+    }
+
+    if query.starts_with("define ") {
+        query = query.replace("define ", "");
+        relevance += 2.0;
+    } else if query.ends_with(" meaning") {
+        query = query.replace(" meaning", "");
+        relevance += 2.0;
+    } else if query.ends_with(" definition") {
+        query = query.replace(" definition", "");
+        relevance += 2.0;
+    }
+
+    for c in query.chars() {
+        if !c.is_alphabetic() {
+            return None;
+        }
+    }
+
+    #[rustfmt::skip]
+    let body = reqwest::get(format!("https://api.dictionaryapi.dev/api/v2/entries/en/{}", query))
+        .await.ok()?.text().await.ok()?;
+
+    create_result(body, relevance)
 }
 
 fn create_result(response: String, relevance: f32) -> Option<SearchResult> {

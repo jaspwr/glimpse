@@ -217,111 +217,68 @@ fn try_consume(ts: &Tokens, matching: Token) -> Option<Tokens> {
     }
 }
 
+type PartialExpr = Option<(Tokens, f64)>;
+type ParserNode = fn(Tokens) -> PartialExpr;
+type ParserNodeClosure = Box<dyn Fn(Tokens) -> PartialExpr>;
+type Operation = fn(f64, f64) -> f64;
+
+fn first(l_node: ParserNode, r_node: ParserNode, operation: Operation) -> ParserNodeClosure {
+    Box::new(move |ts| {
+        let (ts, left) = l_node(ts)?;
+        let (ts, right) = r_node(ts)?;
+        Some((ts, operation(left, right)))
+    })
+}
+
+fn follow(first: ParserNode, operator: Token, identity: f64) -> ParserNodeClosure {
+    Box::new(move |ts| {
+        let operator = operator.clone();
+        match try_consume(&ts, operator) {
+            Some(ts) => first(ts),
+            None => Some((ts, identity)),
+        }
+    })
+}
+
 // TODO: Unary minus and plus
-#[rustfmt::skip]
-fn add(ts: Tokens) -> Option<(Tokens, f64)> {
-    sub(ts)
-    .bind(|(ts, left)|
-        add_prime(ts)
-        .bind(|(ts, right)|
-            Some((ts, left + right)))
-    )
+fn add(ts: Tokens) -> PartialExpr {
+    first(sub, add_, |l, r| l + r)(ts)
 }
 
-#[rustfmt::skip]
-fn add_prime(ts: Tokens) -> Option<(Tokens, f64)> {
-    match try_consume(&ts, Token::Operator('+')) {
-        Some(ts) => sub(ts)
-            .bind(|(ts, left)|
-                add_prime(ts)
-                .bind(|(ts, right)|
-                    Some((ts, left + right)))),
-        None => Some((ts, 0.0))
-    }
+fn add_(ts: Tokens) -> PartialExpr {
+    follow(add, Token::Operator('+'), 0.0)(ts)
 }
 
-#[rustfmt::skip]
-fn sub(ts: Tokens) -> Option<(Tokens, f64)> {
-    mul(ts)
-    .bind(|(ts, left)|
-        sub_prime(ts)
-        .bind(|(ts, right)|
-            Some((ts, left - right))))
+fn sub(ts: Tokens) -> PartialExpr {
+    first(mul, sub_, |l, r| l - r)(ts)
 }
 
-#[rustfmt::skip]
-fn sub_prime(ts: Tokens) -> Option<(Tokens, f64)> {
-    match try_consume(&ts, Token::Operator('-')) {
-        Some(ts) => mul(ts)
-            .bind(|(ts, left)|
-                sub_prime(ts)
-                .bind(|(ts, right)|
-                    Some((ts, left - right)))),
-        None => Some((ts, 0.0))
-    }
+fn sub_(ts: Tokens) -> PartialExpr {
+    follow(sub, Token::Operator('-'), 0.0)(ts)
 }
 
-#[rustfmt::skip]
-fn mul(ts: Tokens) -> Option<(Tokens, f64)> {
-    div(ts)
-    .bind(|(ts, left)|
-        mul_prime(ts)
-        .bind(|(ts, right)|
-            Some((ts, left * right))))
+fn mul(ts: Tokens) -> PartialExpr {
+    first(div, mul_, |l, r| l * r)(ts)
 }
 
-#[rustfmt::skip]
-fn mul_prime(ts: Tokens) -> Option<(Tokens, f64)> {
-    match try_consume(&ts, Token::Operator('*')) {
-        Some(ts) => div(ts)
-            .bind(|(ts, left)|
-                mul_prime(ts)
-                .bind(|(ts, right)|
-                    Some((ts, left * right)))),
-        None => Some((ts, 1.0))
-    }
+fn mul_(ts: Tokens) -> PartialExpr {
+    follow(mul, Token::Operator('*'), 1.0)(ts)
 }
 
-#[rustfmt::skip]
-fn div(ts: Tokens) -> Option<(Tokens, f64)> {
-    pow(ts)
-    .bind(|(ts, left)|
-        div_prime(ts)
-        .bind(|(ts, right)|
-            Some((ts, left / right))))
+fn div(ts: Tokens) -> PartialExpr {
+    first(pow, div_, |l, r| l / r)(ts)
 }
 
-#[rustfmt::skip]
-fn div_prime(ts: Tokens) -> Option<(Tokens, f64)> {
-    match try_consume(&ts, Token::Operator('/')) {
-        Some(ts) => pow(ts)
-            .bind(|(ts, left)|
-                div_prime(ts)
-                .bind(|(ts, right)|
-                    Some((ts, left / right)))),
-        None => Some((ts, 1.0))
-    }
+fn div_(ts: Tokens) -> PartialExpr {
+    follow(div, Token::Operator('/'), 1.0)(ts)
 }
 
-#[rustfmt::skip]
-fn pow(ts: Tokens) -> Option<(Tokens, f64)> {
-    call(ts)
-    .bind(|(ts, left)|
-        pow_prime(ts)
-        .bind(|(ts, right)|
-            Some((ts, left.powf(right)))))
+fn pow(ts: Tokens) -> PartialExpr {
+    first(dice_roll, pow_, |l, r| l.powf(r))(ts)
 }
 
-#[rustfmt::skip]
-fn pow_prime(ts: Tokens) -> Option<(Tokens, f64)> {
-    match try_consume(&ts, Token::Operator('^')) {
-        Some(ts) => call(ts)
-            .bind(|(ts, left)|
-                pow_prime(ts)
-                .bind(|(ts, right)|
-                    Some((ts, left.powf(right))))),
-        None => Some((ts, 1.0))
-    }
+fn pow_(ts: Tokens) -> PartialExpr {
+    follow(pow, Token::Operator('^'), 1.0)(ts)
 }
 
 #[rustfmt::skip]
@@ -329,36 +286,46 @@ fn call(ts: Tokens) -> Option<(Tokens, f64)> {
     let first_token = ts.iter().next()?;
     if let Token::Function(name) = first_token {
         let ts = ts[1..].to_vec();
-        let (ts, n) = dice_roll(ts)?;
-        if let Some(n) = run_fn(&name, n) {
-            Some((ts, n))
-        } else {
-            None
-        }
+        let (ts, n) = brack(ts)?;
+        let n = run_fn(&name, n)?;
+        Some((ts, n))
     } else {
-        dice_roll(ts)
+        brack(ts)
     }
 }
 
-#[rustfmt::skip]
-fn dice_roll(ts: Tokens) -> Option<(Tokens, f64)> {
-    brack(ts)
-    .bind(|(ts, left)|
-        dice_roll_prime(ts)
-        .bind(|(ts, right)|
-            Some((ts, left.powf(right)))))
+fn dice_roll(ts: Tokens) -> PartialExpr {
+    let (ts, left) = call(ts)?;
+    let (ts, right) = dice_roll_(ts)?;
+
+    if right == -1. {
+        return Some((ts, left));
+    }
+
+    Some((ts, roll(left, right)?))
 }
 
-#[rustfmt::skip]
-fn dice_roll_prime(ts: Tokens) -> Option<(Tokens, f64)> {
-    match try_consume(&ts, Token::Operator('d')) {
-        Some(ts) => brack(ts)
-            .bind(|(ts, left)|
-                dice_roll(ts)
-                .bind(|(ts, right)|
-                    Some((ts, left * right)))),
-        None => Some((ts, 1.0))
+fn dice_roll_(ts: Tokens) -> PartialExpr {
+    let operator = Token::Operator('d');
+
+    match try_consume(&ts, operator) {
+        Some(ts) => dice_roll(ts),
+        None => Some((ts, -1.)),
     }
+}
+
+fn roll(dice_count: f64, dice_sides: f64) -> Option<f64> {
+    if dice_count < 1. || dice_sides < 1. || dice_count.fract() != 0. || dice_sides.fract() != 0. {
+        return None;
+    }
+
+    let dice_count = dice_count as usize;
+
+    (0..dice_count)
+        .map(|_| rand::random::<f64>() * dice_sides)
+        .map(|n| n.ceil())
+        .sum::<f64>()
+        .into()
 }
 
 #[rustfmt::skip]

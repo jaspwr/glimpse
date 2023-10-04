@@ -5,7 +5,7 @@ use sqlite::State;
 
 use crate::{
     exec::xdg_open, icon, result_templates::standard_entry, search::string_search,
-    utils::simple_hash, BoxedRuntime,
+    utils::{simple_hash, HashFn, simple_hash_nonce}, BoxedRuntime,
 };
 
 use super::{SearchModule, SearchResult};
@@ -28,20 +28,17 @@ impl SearchModule for WebBookmarks {
     async fn search(&self, query: String, max_results: u32) -> Vec<SearchResult> {
         let query = query.to_lowercase();
         let lock = self.data.lock().await;
+        let hash_fn = simple_hash_nonce(std::any::type_name::<Self>());
         let list = lock.as_ref();
         if let Some(list) = list {
-            string_search(&query, &list.titles, max_results, Box::new(id_hash), false)
+            string_search(&query, &list.titles, max_results, &hash_fn, false)
                 .into_iter()
-                .map(|(name, rel)| Self::create_result(&name, rel, &list.url_map))
+                .map(|(name, rel)| Self::create_result(&name, rel, &list.url_map, hash_fn(&*name)))
                 .collect()
         } else {
             vec![]
         }
     }
-}
-
-fn id_hash(name: &String) -> u64 {
-    (simple_hash(name) >> 3) + 0x123809abedf
 }
 
 impl WebBookmarks {
@@ -75,6 +72,7 @@ impl WebBookmarks {
         name: &String,
         relevance: f32,
         url_map: &HashMap<String, String>,
+        id: u64
     ) -> SearchResult {
         // let icon = fetch_favicon(&list.url_map.get(&name).unwrap()).await;
 
@@ -93,7 +91,7 @@ impl WebBookmarks {
         SearchResult {
             render: Box::new(render),
             relevance,
-            id: id_hash(name),
+            id,
             on_select: Some(Box::new(on_select)),
             preview_window_data: crate::preview_window::PreviewWindowShowing::None,
         }

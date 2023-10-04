@@ -1,10 +1,10 @@
-use crate::biases::BIASES;
+use crate::{biases::BIASES, utils::HashFn};
 
 pub fn string_search(
     needle: &String,
     haystack: &Vec<String>,
     max_results: u32,
-    id_hash: Box<dyn Fn(&String) -> u64>,
+    id_hash: &HashFn,
     case_sensitive: bool,
 ) -> Vec<(String, f32)> {
     let mut results = Vec::<(String, f32)>::new();

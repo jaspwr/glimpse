@@ -1,4 +1,4 @@
-use crate::{BoxedRuntime, preview_window::PreviewWindowShowing, exec::execute_detached};
+use crate::{exec::execute_detached, preview_window::PreviewWindowShowing, BoxedRuntime};
 use async_trait::async_trait;
 use glimpse::{config::CONF, indexing};
 
@@ -7,7 +7,7 @@ pub struct SearchResult {
     pub relevance: f32,
     pub on_select: Option<Box<dyn Fn() + Sync + Send>>,
     pub id: u64,
-    pub preview_window_data: PreviewWindowShowing
+    pub preview_window_data: PreviewWindowShowing,
 }
 
 unsafe impl Send for SearchResult {}
@@ -21,6 +21,9 @@ pub trait SearchModule {
     async fn search(&self, query: String, max_results: u32) -> Vec<SearchResult>;
     fn name(&self) -> String {
         std::any::type_name::<Self>().to_string()
+    }
+    fn uid(&self) -> u64 {
+        crate::utils::simple_hash(&self.name())
     }
 }
 

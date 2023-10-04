@@ -12,7 +12,7 @@ use crate::{
     icon,
     result_templates::standard_entry,
     search::string_search,
-    utils::{self, is_cli_app},
+    utils::{self, is_cli_app, benchmark, HashFn, simple_hash_nonce},
     BoxedRuntime,
 };
 
@@ -20,17 +20,16 @@ use super::{SearchModule, SearchResult};
 
 pub struct Commands {
     apps: Arc<tokio::sync::Mutex<Option<Vec<String>>>>,
+    hash: HashFn
 }
 
 unsafe impl Send for Commands {}
 unsafe impl Sync for Commands {}
 
-fn id_hash(name: &String) -> u64 {
-    utils::simple_hash(name) + 0xabcdef
-}
-
 impl Commands {
     pub fn new(rt: BoxedRuntime) -> Commands {
+        let benchmark = benchmark();
+
         let apps_store = Arc::new(tokio::sync::Mutex::new(None));
 
         let apps_store_cpy = apps_store.clone();
@@ -41,7 +40,13 @@ impl Commands {
             *store = Some(app);
         });
 
-        Commands { apps: apps_store }
+        if let Some(benchmark) = benchmark {
+            println!("Commands module loaded in {:?}", benchmark.elapsed().unwrap());
+        }
+
+        let hash = simple_hash_nonce("commands");
+
+        Commands { apps: apps_store, hash }
     }
 
     fn create_result(&self, name: String, relevance: f32) -> SearchResult {
@@ -59,7 +64,7 @@ impl Commands {
             standard_entry(name, icon, desc)
         };
 
-        let id = id_hash(&name);
+        let id = (*self.hash)(&*name);
 
         let run = move || {
             if is_cli_app(&name) {
@@ -89,8 +94,9 @@ impl SearchModule for Commands {
     async fn search(&self, query: String, max_results: u32) -> Vec<SearchResult> {
         let rc = self.apps.clone();
         let lock = rc.lock().await;
+        let hash_fn = simple_hash_nonce(&*self.name());
         if let Some(apps) = lock.as_ref() {
-            string_search(&query, apps, max_results, Box::new(id_hash), true)
+            string_search(&query, apps, max_results, &hash_fn, true)
                 .into_iter()
                 .map(|(s, r)| self.create_result(s, r + 0.3))
                 .collect()

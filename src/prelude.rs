@@ -11,6 +11,9 @@ impl<T> MonadicOption<T> for Option<T> {
     }
 }
 
+pub type Relevance = f32;
+pub type SearchResultId = u64;
+
 pub trait Trunc {
     fn trunc(self, len: usize) -> Self;
 }

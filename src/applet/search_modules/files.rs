@@ -1,12 +1,10 @@
-use std::{
-    path::PathBuf,
-    sync::Arc,
-};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use async_trait::async_trait;
 use glimpse::{
     config::CONF,
     indexing::{tokenize_string, Index},
+    prelude::*,
 };
 
 use crate::{
@@ -14,7 +12,7 @@ use crate::{
     icon,
     result_templates::standard_entry,
     search::string_search,
-    utils::simple_hash,
+    utils::{benchmark, simple_hash_nonce, HashFn},
     BoxedRuntime,
 };
 
@@ -40,20 +38,20 @@ impl SearchModule for Files {
     async fn search(&self, query: String, max_results: u32) -> Vec<SearchResult> {
         let index = self.index.lock().await;
 
+        let hash_fn = simple_hash_nonce(std::any::type_name::<Self>());
+
         if let Some(index) = index.as_ref() {
             let query = query.to_lowercase();
 
-            let mut files =
-                string_search(&query, &index.files, max_results, Box::new(id_hash), false)
-                    .into_iter()
-                    .map(|(s, r)| self.create_result(s, r, FileType::File))
-                    .collect::<Vec<SearchResult>>();
+            let mut files = string_search(&query, &index.files, max_results, &hash_fn, false)
+                .into_iter()
+                .map(|(s, r)| self.create_result(&s, r, FileType::File, hash_fn(&*s)))
+                .collect::<Vec<SearchResult>>();
 
-            let mut dirs =
-                string_search(&query, &index.dirs, max_results, Box::new(id_hash), false)
-                    .into_iter()
-                    .map(|(s, r)| self.create_result(s, r, FileType::Dir))
-                    .collect::<Vec<SearchResult>>();
+            let mut dirs = string_search(&query, &index.dirs, max_results, &hash_fn, false)
+                .into_iter()
+                .map(|(s, r)| self.create_result(&s, r, FileType::Dir, hash_fn(&*s)))
+                .collect::<Vec<SearchResult>>();
 
             let tokens = tokenize_string(&query);
 
@@ -65,11 +63,15 @@ impl SearchModule for Files {
                         .get(&token)
                         .unwrap_or(&vec![])
                         .into_iter()
-                        .map(|(s, r)| self.handle_tf_idf_result(s, r))
+                        .filter_map(|(s, r)| {
+                            Some(self.handle_tf_idf_result(s, r, hash_fn(s.to_str()?)))
+                        })
                         .collect::<Vec<SearchResult>>()
                 })
                 .flatten()
                 .collect::<Vec<SearchResult>>();
+
+            merge_results(&mut file_contents_matches);
 
             files.append(&mut dirs);
             files.append(&mut file_contents_matches);
@@ -80,16 +82,43 @@ impl SearchModule for Files {
     }
 }
 
+fn merge_results(results: &mut Vec<SearchResult>) {
+    let mut relevances: HashMap<SearchResultId, Relevance> = HashMap::new();
+    for result in results.into_iter() {
+        match relevances.get(&result.id) {
+            Some(r) => {
+                let new_r = result.relevance + r;
+                relevances.insert(result.id, new_r);
+            }
+            None => {
+                relevances.insert(result.id, result.relevance);
+            }
+        }
+    }
+
+    results.dedup_by(|a, b| a.id == b.id);
+
+    for results in results {
+        results.relevance = *relevances.get(&results.id).unwrap_or(&0.0);
+    }
+}
+
 impl Files {
-    fn handle_tf_idf_result(&self, s: &PathBuf, relevance: &f32) -> SearchResult {
+    fn handle_tf_idf_result(&self, s: &PathBuf, relevance: &f32, id: u64) -> SearchResult {
         let s = s.to_str().unwrap().to_string();
 
         let relevance = clamp_relevance(relevance);
 
-        self.create_result(s, relevance, FileType::File)
+        self.create_result(&s, relevance, FileType::File, id)
     }
 
-    fn create_result(&self, name: String, relevance: f32, kind: FileType) -> SearchResult {
+    fn create_result(
+        &self,
+        name: &String,
+        relevance: f32,
+        kind: FileType,
+        id: u64,
+    ) -> SearchResult {
         let name_cpy = name.clone();
         let render = move || {
             let name = match file_name(name_cpy.clone()) {
@@ -137,7 +166,7 @@ impl Files {
         SearchResult {
             render: Box::new(render),
             relevance,
-            id: id_hash(&name),
+            id,
             on_select: Some(Box::new(on_select)),
             preview_window_data: crate::preview_window::PreviewWindowShowing::File(PathBuf::from(
                 name,
@@ -197,7 +226,6 @@ fn find_file_icon_name(ext: &str) -> &str {
         "deb" | "rpm" => "package-x-generic",
         "tex" => "text-x-tex",
         "toml" => "text-x-toml",
-        "jl" => "text-x-julia",
         _ => "text-x-generic",
     }
 }
@@ -219,16 +247,14 @@ fn file_name(path_str: String) -> Option<String> {
     Some(file_name)
 }
 
-fn id_hash(name: &String) -> u64 {
-    simple_hash(name) + 0x12389
-}
-
 impl Files {
     pub fn new(rt: BoxedRuntime) -> Files {
         let index = Arc::new(tokio::sync::Mutex::new(None));
 
         let index_cpy = index.clone();
         rt.lock().unwrap().spawn(async move {
+            let benchmark = benchmark();
+
             let store = index_cpy.clone();
             let mut lock = store.lock().await;
             // This lock needs to be held until we are finish with initalisation
@@ -236,6 +262,10 @@ impl Files {
             let index = Index::load("index").await;
 
             *lock = index;
+
+            if let Some(benchmark) = benchmark {
+                println!("Files module loaded in {:?}", benchmark.elapsed().unwrap());
+            }
         });
 
         Files { index }

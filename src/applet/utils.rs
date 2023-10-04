@@ -8,6 +8,37 @@ pub fn simple_hash(s: &str) -> u64 {
     ret
 }
 
+pub type HashFn = Box<dyn Fn(&str) -> u64>;
+
+pub fn simple_hash_nonce(n: &str) -> HashFn {
+    let nonce = simple_hash(n);
+    Box::new(move |s| simple_hash(s) ^ nonce)
+}
+
+pub struct BenchmarkTimer {
+    time: std::time::SystemTime
+}
+
+impl BenchmarkTimer {
+    fn new() -> BenchmarkTimer {
+        BenchmarkTimer { time: std::time::SystemTime::now() }
+    }
+
+    pub fn elapsed(&self) -> Result<String, std::time::SystemTimeError> {
+        let t = self.time.elapsed()?;
+        Ok(format!("{:?}", t))
+    }
+}
+
+pub fn benchmark() -> Option<BenchmarkTimer> {
+    if cfg!(debug_assertions) {
+        Some(BenchmarkTimer::new())
+    } else {
+        None
+    }
+}
+
+
 pub fn is_cli_app(name: &String) -> bool {
     matches!(
         name.as_str(),

@@ -23,6 +23,7 @@ static CONTROL: AtomicBool = AtomicBool::new(false);
 use glimpse::config::{CONF, CONF_FILE_PATH, CSS};
 use preview_window::{PreviewWindowShowing, SafeBox};
 use search_modules::{SearchModule, SearchResult};
+use utils::benchmark;
 
 pub static RUNTIME: Lazy<BoxedRuntime> = Lazy::new(|| {
     let rt = tokio::runtime::Runtime::new().unwrap();
@@ -419,11 +420,7 @@ fn perform_search(
             let f = module.search(query.clone(), 10);
             let list = list.clone();
             let (task, handle) = abortable(async move {
-                let search_time_benchmark = if cfg!(debug_assertions) {
-                    Some(std::time::SystemTime::now())
-                } else {
-                    None
-                };
+                let search_time_benchmark = benchmark();
 
                 let results = f.await;
                 append_results(results, list.clone()).await;
