@@ -32,12 +32,6 @@ pub fn steam_folder_exists() -> bool {
 
 #[async_trait]
 impl SearchModule for SteamGames {
-    fn is_ready(&self) -> bool {
-        // let lock = self.data.lock().unwrap();
-        // lock.is_some()
-        true
-    }
-
     async fn search(&self, query: String, max_results: u32) -> Vec<SearchResult> {
         let query = query.to_lowercase();
         let data = self.data.lock().await;

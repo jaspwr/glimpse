@@ -16,12 +16,14 @@ pub fn simple_hash_nonce(n: &str) -> HashFn {
 }
 
 pub struct BenchmarkTimer {
-    time: std::time::SystemTime
+    time: std::time::SystemTime,
 }
 
 impl BenchmarkTimer {
     fn new() -> BenchmarkTimer {
-        BenchmarkTimer { time: std::time::SystemTime::now() }
+        BenchmarkTimer {
+            time: std::time::SystemTime::now(),
+        }
     }
 
     pub fn elapsed(&self) -> Result<String, std::time::SystemTimeError> {
@@ -37,7 +39,6 @@ pub fn benchmark() -> Option<BenchmarkTimer> {
         None
     }
 }
-
 
 pub fn is_cli_app(name: &String) -> bool {
     matches!(

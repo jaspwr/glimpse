@@ -29,12 +29,6 @@ enum FileType {
 
 #[async_trait]
 impl SearchModule for Files {
-    fn is_ready(&self) -> bool {
-        // let index = self.index.lock().unwrap();
-        // index.is_some()
-        true
-    }
-
     async fn search(&self, query: String, max_results: u32) -> Vec<SearchResult> {
         let index = self.index.lock().await;
 
@@ -53,7 +47,8 @@ impl SearchModule for Files {
                 .map(|(s, r)| self.create_result(&s, r, FileType::Dir, hash_fn(&*s)))
                 .collect::<Vec<SearchResult>>();
 
-            let tokens = tokenize_string(&query);
+            let mut tokens = tokenize_string(&query);
+            tokens.dedup();
 
             let mut file_contents_matches = tokens
                 .into_iter()

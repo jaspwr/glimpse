@@ -5,7 +5,7 @@ use sqlite::State;
 
 use crate::{
     exec::xdg_open, icon, result_templates::standard_entry, search::string_search,
-    utils::{simple_hash, HashFn, simple_hash_nonce}, BoxedRuntime,
+    utils::simple_hash_nonce, BoxedRuntime,
 };
 
 use super::{SearchModule, SearchResult};
@@ -21,10 +21,6 @@ struct BookMarksData {
 
 #[async_trait]
 impl SearchModule for WebBookmarks {
-    fn is_ready(&self) -> bool {
-        true
-    }
-
     async fn search(&self, query: String, max_results: u32) -> Vec<SearchResult> {
         let query = query.to_lowercase();
         let lock = self.data.lock().await;
@@ -72,7 +68,7 @@ impl WebBookmarks {
         name: &String,
         relevance: f32,
         url_map: &HashMap<String, String>,
-        id: u64
+        id: u64,
     ) -> SearchResult {
         // let icon = fetch_favicon(&list.url_map.get(&name).unwrap()).await;
 

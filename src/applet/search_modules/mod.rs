@@ -17,7 +17,6 @@ pub type BoxedSearchModule = Box<dyn SearchModule + Sync + Send>;
 
 #[async_trait]
 pub trait SearchModule {
-    fn is_ready(&self) -> bool;
     async fn search(&self, query: String, max_results: u32) -> Vec<SearchResult>;
     fn name(&self) -> String {
         std::any::type_name::<Self>().to_string()

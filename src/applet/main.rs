@@ -7,7 +7,7 @@ use biases::increment_bias;
 use futures::{future::abortable, stream::AbortHandle};
 use gdk::glib::once_cell::sync::Lazy;
 use gdk::{glib::idle_add_once, SeatCapabilities};
-use gtk::{prelude::*, subclass::container};
+use gtk::prelude::*;
 
 mod biases;
 mod exec;
@@ -413,29 +413,26 @@ fn perform_search(
     current_task_handle: Arc<Mutex<Vec<AbortHandle>>>,
     rt: BoxedRuntime,
 ) {
-    SEARCH_MODULES
-        .iter()
-        .filter(|module| module.is_ready())
-        .for_each(|module| {
-            let f = module.search(query.clone(), 10);
-            let list = list.clone();
-            let (task, handle) = abortable(async move {
-                let search_time_benchmark = benchmark();
+    for module in SEARCH_MODULES.iter() {
+        let f = module.search(query.clone(), 10);
+        let list = list.clone();
+        let (task, handle) = abortable(async move {
+            let search_time_benchmark = benchmark();
 
-                let results = f.await;
-                append_results(results, list.clone()).await;
+            let results = f.await;
+            append_results(results, list.clone()).await;
 
-                if let Some(time) = search_time_benchmark {
-                    println!(
-                        "[{}] Search took: {:?}",
-                        module.name(),
-                        time.elapsed().unwrap()
-                    );
-                }
-            });
-            current_task_handle.lock().unwrap().push(handle);
-            rt.lock().unwrap().spawn(task);
+            if let Some(time) = search_time_benchmark {
+                println!(
+                    "[{}] Search took: {:?}",
+                    module.name(),
+                    time.elapsed().unwrap()
+                );
+            }
         });
+        current_task_handle.lock().unwrap().push(handle);
+        rt.lock().unwrap().spawn(task);
+    }
 }
 
 fn perform_entry_action(row: gtk::ListBoxRow) {

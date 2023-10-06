@@ -86,11 +86,6 @@ impl Commands {
 
 #[async_trait]
 impl SearchModule for Commands {
-    fn is_ready(&self) -> bool {
-        true
-        // self.apps.lock().await.is_some()
-    }
-
     async fn search(&self, query: String, max_results: u32) -> Vec<SearchResult> {
         let rc = self.apps.clone();
         let lock = rc.lock().await;

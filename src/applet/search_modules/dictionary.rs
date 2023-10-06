@@ -16,10 +16,6 @@ impl Dictionary {
 
 #[async_trait]
 impl SearchModule for Dictionary {
-    fn is_ready(&self) -> bool {
-        true
-    }
-
     async fn search(&self, query: String, _: u32) -> Vec<SearchResult> {
         // wait 0.5 seconds to allow the user to type more
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
