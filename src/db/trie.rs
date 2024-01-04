@@ -1,6 +1,13 @@
 use bytemuck::{Pod, Zeroable};
 
-use super::{allocator::SerializableDBPointer, hashmap::DBHashMap, string::DBString, session::DBSession};
+use crate::prelude::Relevance;
+
+use super::{
+    allocator::{DBPointer, SerializableDBPointer},
+    hashmap::DBHashMap,
+    session::DBSession,
+    string::DBString,
+};
 
 #[derive(Clone, Copy)]
 pub struct DBTrie {
@@ -33,9 +40,13 @@ impl DBTrie {
         let mut root = borrow[0].clone();
 
         root.insert(db, word, points_to);
+
+        assert!(self.get(db, word).iter().any(|(s, _)| s == points_to));
     }
 
-    pub fn get(&mut self, db: &mut DBSession, word: &str) -> Vec<String> {
+    pub fn get(&mut self, db: &mut DBSession, word: &str) -> Vec<(String, Relevance)> {
+        let mut matches = vec![];
+
         let ptr = self.root.to_ptr();
         let mut borrow = db.borrow_mut(&ptr);
         assert!(borrow.len() == 1);
@@ -47,25 +58,47 @@ impl DBTrie {
                 let mut borrow = db.borrow_mut(&ptr);
                 assert!(borrow.len() == 1);
                 current = borrow[0].clone();
-
-
             } else {
-                return vec![];
+                return matches;
             }
         }
 
-        let ptr = current.points_to.to_ptr();
+        // while current.points_to.is_null {
+        //     let children = current.children.to_ptr();
+        //     let mut borrow = db.borrow_mut(&children);
+        //     assert!(borrow.len() == 1);
+        //     let children = borrow[0].clone();
 
-        if ptr.is_null {
-            return vec![];
-        }
-        let mut borrow = db.borrow_mut(&ptr);
-        assert!(borrow.len() == 1);
-        let points_to = borrow[0].clone();
+        //     if children.len() != 1 {
+        //         break;
+        //     }
 
 
-        vec![points_to.load_string(db)]
+        // }
+
+        let mut ptr = current.points_to.to_ptr();
+
+        push_string(ptr, 20.0, db, &mut matches);
+
+        return matches;
     }
+}
+
+fn push_string(
+    ptr: DBPointer<DBString>,
+    relevance: Relevance,
+    db: &mut DBSession,
+    matches: &mut Vec<(String, f32)>,
+) {
+    if ptr.is_null {
+        return;
+    }
+
+    let mut borrow = db.borrow_mut(&ptr);
+    assert!(borrow.len() == 1);
+    let points_to = borrow[0].clone();
+
+    matches.push((points_to.load_string(db), relevance));
 }
 
 impl DBTrieNode {
@@ -83,6 +116,7 @@ impl DBTrieNode {
     pub fn insert(&mut self, db: &mut DBSession, word: &str, points_to: &str) {
         let mut chars = word.chars();
 
+
         if let Some(c) = chars.next() {
             let rest = chars.as_str();
 
@@ -91,13 +125,22 @@ impl DBTrieNode {
             assert!(borrow.len() == 1);
             let mut children = borrow[0].clone(); // Only contains a pointer so can be cloned
 
-            if let Some(existing_node) = children.get(db, c) {
-                let ptr = existing_node.to_ptr();
+            if let Some(existing_node_) = children.get(db, c) {
+                if !chars.as_str().is_empty() {
+                    let ptr = existing_node_.to_ptr();
+                    let borrow = db.borrow_mut(&ptr);
+                    assert!(borrow.len() == 1);
+                    borrow[0].clone().insert(db, rest, points_to);
+                    return;
+                }
+
+                let points_to = allocate_string(db, points_to);
+
+                let ptr = existing_node_.to_ptr();
                 let mut borrow = db.borrow_mut(&ptr);
                 assert!(borrow.len() == 1);
-                let mut existing_node = borrow[0].clone();
+                borrow[0].points_to = points_to;
 
-                existing_node.insert(db, rest, points_to);
             } else {
                 let mut new_node = DBTrieNode::new(db);
                 new_node.insert(db, rest, points_to);
@@ -108,15 +151,16 @@ impl DBTrieNode {
                 children.insert(db, c, new_node);
             }
         } else {
-            let points_to = DBString::new(db, points_to.to_string());
-            let points_to = db.alloc(vec![points_to]);
-            let points_to = points_to.to_serializable();
-
+            let points_to = allocate_string(db, points_to);
             self.points_to = points_to;
         }
     }
 
-    pub fn get(&mut self, db: &mut DBSession, c: char) -> Option<SerializableDBPointer<DBTrieNode>> {
+    pub fn get(
+        &mut self,
+        db: &mut DBSession,
+        c: char,
+    ) -> Option<SerializableDBPointer<DBTrieNode>> {
         let ptr = self.children.to_ptr();
         let mut borrow = db.borrow_mut(&ptr);
         assert!(borrow.len() == 1);
@@ -126,14 +170,21 @@ impl DBTrieNode {
     }
 }
 
+fn allocate_string(db: &mut DBSession, points_to: &str) -> SerializableDBPointer<DBString> {
+    let points_to = DBString::new(db, points_to.to_string());
+    let points_to = db.alloc(vec![points_to]);
+    let points_to = points_to.to_serializable();
+    points_to
+}
+
 unsafe impl Zeroable for DBTrieNode {}
 unsafe impl Pod for DBTrieNode {}
 
 #[cfg(test)]
 mod tests {
-    use std::{path::PathBuf, fs};
+    use std::{fs, path::PathBuf};
 
-    use crate::db::session::{remove_if_exists, meta_path, DBSession};
+    use crate::db::session::{meta_path, remove_if_exists, DBSession};
 
     use super::*;
 
@@ -151,8 +202,8 @@ mod tests {
         trie.insert(&mut session, "hello", "world");
         trie.insert(&mut session, "help", "asdhjkl");
 
-        assert_eq!(trie.get(&mut session, "hello"), vec!["world".to_string()]);
-        assert_eq!(trie.get(&mut session, "help"), vec!["asdhjkl".to_string()]);
+        assert_eq!(trie.get(&mut session, "hello")[0].0, "world".to_string());
+        assert_eq!(trie.get(&mut session, "help")[0].0, "asdhjkl".to_string());
 
         drop(session);
 

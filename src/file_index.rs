@@ -7,6 +7,9 @@ use once_cell::sync::Lazy;
 use savefile_derive::Savefile;
 
 use crate::config::CONF;
+use crate::db::hashmap_db::HashMapDB;
+use crate::db::list::DBList;
+use crate::db::string::DBString;
 use crate::db::string_search_db::StringSearchDb;
 use crate::prelude::*;
 
@@ -24,10 +27,13 @@ pub static LOCK_PATH: Lazy<PathBuf> = Lazy::new(|| PATH.join("lock"));
 
 pub static LAST_INDEXED_PATH: Lazy<PathBuf> = Lazy::new(|| PATH.join("last_indexed"));
 
+pub type TfIdfMap = HashMapDB<DBString, DBList<(Relevance, DBString)>>;
+
 pub struct FileIndex {
     pub files: StringSearchDb,
     pub dirs: StringSearchDb,
-    pub tf_idf: HashMap<String, Vec<(PathBuf, f32)>>,
+    // pub tf_idf: HashMap<String, Vec<(PathBuf, f32)>>,
+    pub tf_idf: TfIdfMap
 }
 
 pub fn lock() -> Result<(), Box<dyn std::error::Error>> {
@@ -79,12 +85,30 @@ fn unlock_if_old() -> Option<bool> {
 }
 
 impl FileIndex {
+    fn files_path() -> PathBuf {
+        PATH.join("files")
+    }
+
+    fn dirs_path() -> PathBuf {
+        PATH.join("dirs")
+    }
+
+    fn tf_idf_path() -> PathBuf {
+        PATH.join("tf_idf")
+    }
+
     pub fn open() -> Result<FileIndex, Box<dyn std::error::Error>> {
-        let files = StringSearchDb::open(PATH.join("files"));
-        let dirs = StringSearchDb::open(PATH.join("dirs"));
-        let tf_idf = HashMap::new();
+        let files = StringSearchDb::open(Self::files_path());
+        let dirs = StringSearchDb::open(Self::dirs_path());
+        let tf_idf = HashMapDB::open(Self::tf_idf_path(), 5000);
 
         Ok(FileIndex { files, dirs, tf_idf })
+    }
+
+    pub fn reset_all() {
+        StringSearchDb::reset(Self::files_path());
+        StringSearchDb::reset(Self::dirs_path());
+        StringSearchDb::reset(Self::tf_idf_path());
     }
 }
 

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs::DirEntry, path::PathBuf};
+use std::{collections::HashMap, fs::DirEntry, path::{PathBuf, Path}};
 
 use docx_rs::*;
 use lopdf::Document;
@@ -6,7 +6,7 @@ use lopdf::Document;
 use glimpse::{
     config::CONF,
     db::string_search_db::StringSearchDb,
-    file_index::{self, tokenize_string, FileIndex},
+    file_index::{self, tokenize_string, FileIndex, TfIdfMap},
 };
 
 fn main() {
@@ -23,7 +23,10 @@ fn main() {
 }
 
 fn reindex() {
+    FileIndex::reset_all();
     let mut idx = FileIndex::open().unwrap();
+
+    let mut files_list: Vec<PathBuf> = vec![];
 
     for path in &CONF.search_paths {
         let _ = index_dir(
@@ -31,6 +34,7 @@ fn reindex() {
             &CONF.search_hidden_folders,
             idx.files.clone(),
             idx.dirs.clone(),
+            &mut files_list,
             &CONF.ignore_directories,
         );
     }
@@ -38,7 +42,7 @@ fn reindex() {
     idx.dirs.save_meta();
     idx.files.save_meta();
 
-    // let tf_idf = create_token_to_document_map(&files);
+    create_token_to_document_map(idx.tf_idf.clone(), &files_list);
 
     // let files = files
     //     .into_iter()
@@ -68,6 +72,7 @@ fn index_dir(
     index_hidden: &bool,
     files: StringSearchDb,
     mut dirs: StringSearchDb,
+    files_names: &mut Vec<PathBuf>,
     ignore_dirs: &Vec<String>,
 ) -> Result<(), std::io::Error> {
     if ignore_dirs.contains(&path.file_name().unwrap().to_str().unwrap().to_string()) {
@@ -87,6 +92,7 @@ fn index_dir(
             index_hidden,
             files.clone(),
             dirs.clone(),
+            files_names,
             ignore_dirs,
         );
     }
@@ -99,6 +105,7 @@ fn handle_dir_entry(
     index_hidden: &bool,
     mut files: StringSearchDb,
     dirs: StringSearchDb,
+    files_names: &mut Vec<PathBuf>,
     ignore_dirs: &Vec<String>,
 ) -> Result<(), std::io::Error> {
     let entry = entry?;
@@ -107,7 +114,7 @@ fn handle_dir_entry(
         if !index_hidden && is_hidden_file(&entry) {
             return Ok(());
         }
-        let _ = index_dir(&entry.path(), index_hidden, files, dirs, ignore_dirs);
+        let _ = index_dir(&entry.path(), index_hidden, files, dirs, files_names, ignore_dirs);
     } else {
         if !index_hidden && is_hidden_file(&entry) {
             return Ok(());
@@ -117,6 +124,7 @@ fn handle_dir_entry(
         let file_path = entry.path().to_str().unwrap().to_string();
 
         files.insert(file_name, Some(file_path));
+        files_names.push(entry.path());
         // TODO
     }
     Ok(())
@@ -128,21 +136,37 @@ type TokenFrequency = HashMap<String, f32>;
 
 type InverseDocumentFrequency = HashMap<String, f32>;
 
-fn create_token_to_document_map(documents: &Vec<PathBuf>) -> HashMap<String, Vec<(PathBuf, f32)>> {
+fn create_token_to_document_map(mut map: TfIdfMap, documents: &Vec<PathBuf>) -> HashMap<String, Vec<(PathBuf, f32)>> {
     let mut token_to_document = HashMap::new();
 
     let doc_to_tf_idf = documents_to_tf_idf(documents);
 
     for (path, tf_idf) in doc_to_tf_idf {
         for (token, tf_idf) in tf_idf {
-            let doc_vec = token_to_document.entry(token).or_insert(vec![]);
-            if tf_idf > 0.0 {
-                doc_vec.push((path.clone(), tf_idf));
+            let allocated_token = map.alloc_string(token.clone());
+            let mut doc_list = if let Some(list) = map.get(token.clone()) {
+                list
+            } else {
+                let list = map.new_list();
+                map.insert(allocated_token, list);
+                list
+            };
+
+            // let doc_vec = token_to_document.entry(token).or_insert(vec![]);
+
+            if tf_idf > 5.0 {
+                println!("appending");
+                let allocated_path = map.alloc_string(path.to_str().unwrap().to_string());
+
+                map.push_to_list(&mut doc_list, (tf_idf, allocated_path));
+                // doc_vec.push((path.clone(), tf_idf));
             }
-            doc_vec.sort_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap());
-            if doc_vec.len() > 5 {
-                doc_vec.pop();
-            }
+
+            // doc_vec.sort_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap());
+
+            // if doc_vec.len() > 5 {
+            //     doc_vec.pop();
+            // }
         }
     }
 

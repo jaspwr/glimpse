@@ -23,10 +23,12 @@ impl StringSearchDb {
             assert!(borrowed.len() == 1);
             borrowed[0].clone()
         } else {
-            assert!(db.meta.chunk_descriptors.len() == 0);
+            // assert!(db.meta.chunk_descriptors.len() == 0);
             let trie = DBTrie::new(&mut db);
             let trie_alloc = db.alloc(vec![trie.clone()]);
-            db.meta.pointer_store.push(SaveableDBPointer::from_ptr(trie_alloc));
+            db.meta
+                .pointer_store
+                .push(SaveableDBPointer::from_ptr(trie_alloc));
             db.meta.save();
             trie
         };
@@ -44,17 +46,16 @@ impl StringSearchDb {
     }
 
     pub fn get(&mut self, word: &str) -> Vec<(String, f32)> {
-        println!("getting {:?}", word);
         let mut db = self.db.lock().unwrap();
-        self.trie
-            .get(&mut db, word)
-            .into_iter()
-            .map(|w| (w, 20.0))
-            .collect()
+        self.trie.get(&mut db, word)
     }
 
     pub fn save_meta(&mut self) {
         // let mut db = self.db.lock().unwrap();
         // db.meta.save();
+    }
+
+    pub fn reset(path: PathBuf) {
+        DBSession::reset(path);
     }
 }

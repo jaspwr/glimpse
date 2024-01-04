@@ -1,8 +1,10 @@
+use std::{collections::hash_map::DefaultHasher, hash::Hasher};
+
 use bytemuck::{Zeroable, Pod};
 
 use super::{
     allocator::{DBPointer, SerializableDBPointer},
-    session::DBSession,
+    session::DBSession, hashmap::{HashWithDBAccess},
 };
 
 #[derive(Clone, Copy)]
@@ -30,6 +32,21 @@ impl DBString {
 
     pub fn dealloc(&self, db: &mut DBSession) {
         db.dealloc(self.0.to_ptr());
+    }
+}
+
+impl HashWithDBAccess for DBString {
+    fn hash(&self, db: &mut DBSession) -> u64 {
+        let str = self.load_string(db);
+        let mut hasher = DefaultHasher::new();
+        std::hash::Hash::hash(&str, &mut hasher);
+        hasher.finish()
+    }
+}
+
+impl PartialEq for DBString {
+    fn eq(&self, other: &Self) -> bool {
+        true
     }
 }
 

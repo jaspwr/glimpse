@@ -48,7 +48,7 @@ impl<T: Copy + 'static> DBList<T> {
         self.set_head(db, new_head.to_serializable());
     }
 
-    pub fn remove(&mut self, db: &mut DBSession, cmp: Box<dyn Fn(T) -> bool>) {
+    pub fn remove(&mut self, db: &mut DBSession, cmp: impl Fn(T) -> bool) {
         let mut current = self.fetch_current_head(db);
 
         let mut prev = SerializableDBPointer::<DBListNode<T>>::null();

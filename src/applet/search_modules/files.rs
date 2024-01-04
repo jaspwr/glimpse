@@ -68,15 +68,26 @@ impl SearchModule for Files {
             let mut file_contents_matches = tokens
                 .into_iter()
                 .map(|token| {
-                    index
-                        .tf_idf
-                        .get(&token)
-                        .unwrap_or(&vec![])
-                        .into_iter()
-                        .filter_map(|(s, r)| {
-                            Some(self.handle_tf_idf_result(s, r, hash_fn(s.to_str()?)))
-                        })
-                        .collect::<Vec<SearchResult>>()
+                    if let Some(list) = index.tf_idf.get(token) {
+                        index.tf_idf.get_list(&list)
+                            .iter()
+                            .filter_map(|(r, s)| {
+                                let s = index.tf_idf.get_string(&s);
+                                Some(self.handle_tf_idf_result(&PathBuf::from(s.clone()), &r, hash_fn(s.as_str())))
+                            })
+                            .collect::<Vec<SearchResult>>()
+                    } else {
+                        vec![]
+                    }
+
+                    // index
+                    //     .tf_idf
+                    //      t.get(&token))
+                    //     .iter()
+                    //     .filter_map(|(s, r)| {
+                    //         Some(self.handle_tf_idf_result(s, r, hash_fn(s.to_str()?)))
+                    //     })
+                    //     .collect::<Vec<SearchResult>>()
                 })
                 .flatten()
                 .collect::<Vec<SearchResult>>();

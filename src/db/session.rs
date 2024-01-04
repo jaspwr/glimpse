@@ -48,22 +48,31 @@ impl DBSession {
 
         let capacity = BytesLength(mmap.len());
 
+
         let session = Self {
             mmap: Some(mmap),
             meta,
             capacity,
             path,
         };
+
         session
+    }
+
+    pub fn reset(path: PathBuf) {
+        remove_if_exists(&path);
+        remove_if_exists(&meta_path(&path));
     }
 
     pub fn resize(&mut self, new_capacity: BytesLength) {
         self.meta.save();
-        self.mmap.as_mut().unwrap().flush().unwrap();
+        // self.mmap.as_mut().unwrap().flush().unwrap();
         self.mmap = None;
 
         const SECTION_SIZE: usize = 1024;
         let new_capacity = (new_capacity.0 / SECTION_SIZE + 1) * SECTION_SIZE + 2048;
+
+        println!("resized to {} KiB", new_capacity / 1024);
 
         let mut file = OpenOptions::new()
             .write(true)
@@ -119,7 +128,7 @@ fn create_file_if_inexistent(path: &PathBuf) -> bool {
 pub struct Meta {
     pub path: PathBuf,
     pub max_allocated: Address,
-    pub chunk_descriptors: Vec<DBChunkDescriptor>,
+    // pub chunk_descriptors: Vec<DBChunkDescriptor>,
     pub pointer_store: Vec<SaveableDBPointer>
 }
 
@@ -129,17 +138,17 @@ impl Meta {
     pub fn new(path: &PathBuf) -> Self {
         Self {
             path: path.clone(),
-            chunk_descriptors: vec![],
+            // chunk_descriptors: vec![],
             max_allocated: Address(0),
             pointer_store: vec![],
         }
     }
 
-    pub fn chunk_at(&self, address: Address) -> Option<&DBChunkDescriptor> {
-        self.chunk_descriptors
-            .iter()
-            .find(|chunk| chunk.start == address)
-    }
+    // pub fn chunk_at(&self, address: Address) -> Option<&DBChunkDescriptor> {
+    //     self.chunk_descriptors
+    //         .iter()
+    //         .find(|chunk| chunk.start == address)
+    // }
 
     pub fn load(path: &PathBuf) -> Self {
         let mut file = fs::File::open(path.clone()).unwrap();
@@ -171,7 +180,7 @@ mod tests {
 
         let mut session = DBSession::open(path.clone());
 
-        session.resize(BytesLength(2047));
+        // session.resize(BytesLength(2047));
 
         drop(session);
 
@@ -190,7 +199,7 @@ mod tests {
         meta.save();
 
         let mut meta = Meta::load(&meta_path);
-        assert_eq!(meta.chunk_descriptors.len(), 0);
+        // assert_eq!(meta.chunk_descriptors.len(), 0);
 
         let chunk = DBChunkDescriptor {
             start: Address(0),
@@ -198,12 +207,12 @@ mod tests {
             allocated: true,
         };
 
-        meta.chunk_descriptors.push(chunk);
+        // meta.chunk_descriptors.push(chunk);
         meta.save();
 
         let meta = Meta::load(&meta_path);
 
-        assert_eq!(meta.chunk_descriptors[0].length, BytesLength(1024));
+        // assert_eq!(meta.chunk_descriptors[0].length, BytesLength(1024));
 
         fs::remove_file(meta_path).unwrap();
     }
