@@ -5,8 +5,9 @@ use sqlite::State;
 
 use crate::{
     exec::xdg_open, icon, result_templates::standard_entry, search::string_search,
-    utils::simple_hash_nonce, BoxedRuntime,
+    utils::simple_hash_nonce,
 };
+use crate::app::BoxedRuntime;
 
 use super::{SearchModule, SearchResult};
 
@@ -24,7 +25,7 @@ impl SearchModule for WebBookmarks {
     async fn search(&self, query: String, max_results: u32) -> Vec<SearchResult> {
         let query = query.to_lowercase();
         let lock = self.data.lock().await;
-        let hash_fn = simple_hash_nonce(std::any::type_name::<Self>());
+        let hash_fn = simple_hash_nonce(&self.name());
         let list = lock.as_ref();
         if let Some(list) = list {
             string_search(&query, &list.titles, max_results, &hash_fn, false)

@@ -313,13 +313,11 @@ fn follow(first: ParserNode, operator: Token) -> impl Fn(Tokens) -> PartialExpr 
     }
 }
 
-// TODO: Unary minus and plus
-
 fn test(ts: Tokens) -> PartialExpr {
-    first(add, assign_, |l, r| if l == r { 1. } else { 0. })(ts)
+    first(add, test_, |l, r| if l == r { 1. } else { 0. })(ts)
 }
 
-fn assign_(ts: Tokens) -> PartialExpr {
+fn test_(ts: Tokens) -> PartialExpr {
     follow(test, Token::Operator('='))(ts)
 }
 

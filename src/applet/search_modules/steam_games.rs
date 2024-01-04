@@ -4,7 +4,7 @@ use async_trait::async_trait;
 
 use crate::{
     exec::execute_detached, icon, result_templates::standard_entry, search::string_search,
-    utils::{simple_hash, simple_hash_nonce, HashFn}, BoxedRuntime,
+    utils::{simple_hash, simple_hash_nonce, HashFn}, app::BoxedRuntime,
 };
 
 use super::{SearchModule, SearchResult};

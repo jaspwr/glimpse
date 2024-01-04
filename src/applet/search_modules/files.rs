@@ -3,7 +3,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use async_trait::async_trait;
 use glimpse::{
     config::CONF,
-    indexing::{tokenize_string, Index},
+    file_index::{tokenize_string, FileIndex},
     prelude::*,
 };
 
@@ -13,13 +13,13 @@ use crate::{
     result_templates::standard_entry,
     search::string_search,
     utils::{benchmark, simple_hash_nonce, HashFn},
-    BoxedRuntime,
+    app::BoxedRuntime,
 };
 
 use super::{SearchModule, SearchResult};
 
 pub struct Files {
-    index: Arc<tokio::sync::Mutex<Option<Index>>>,
+    index: Arc<tokio::sync::Mutex<Option<FileIndex>>>,
 }
 
 enum FileType {
@@ -30,19 +30,34 @@ enum FileType {
 #[async_trait]
 impl SearchModule for Files {
     async fn search(&self, query: String, max_results: u32) -> Vec<SearchResult> {
-        let index = self.index.lock().await;
+        if query.len() == 0 {
+            return vec![];
+        }
+
+
+        let mut index = self.index.lock().await;
 
         let hash_fn = simple_hash_nonce(std::any::type_name::<Self>());
 
-        if let Some(index) = index.as_ref() {
-            let query = query.to_lowercase();
+        if let Some(index) = index.as_mut() {
+            // let query = query.to_lowercase();
 
-            let mut files = string_search(&query, &index.files, max_results, &hash_fn, false)
+            // let mut files = string_search(&query, &index.files, max_results, &hash_fn, false)
+            //     .into_iter()
+            //     .map(|(s, r)| self.create_result(&s, r, FileType::File, hash_fn(&*s)))
+            //     .collect::<Vec<SearchResult>>();
+
+            // let mut dirs = string_search(&query, &index.dirs, max_results, &hash_fn, false)
+            //     .into_iter()
+            //     .map(|(s, r)| self.create_result(&s, r, FileType::Dir, hash_fn(&*s)))
+            //     .collect::<Vec<SearchResult>>();
+
+            let mut files = index.files.get(&query)
                 .into_iter()
                 .map(|(s, r)| self.create_result(&s, r, FileType::File, hash_fn(&*s)))
                 .collect::<Vec<SearchResult>>();
 
-            let mut dirs = string_search(&query, &index.dirs, max_results, &hash_fn, false)
+            let mut dirs = index.dirs.get(&query)
                 .into_iter()
                 .map(|(s, r)| self.create_result(&s, r, FileType::Dir, hash_fn(&*s)))
                 .collect::<Vec<SearchResult>>();
@@ -69,6 +84,7 @@ impl SearchModule for Files {
             merge_results(&mut file_contents_matches);
 
             files.append(&mut dirs);
+
             files.append(&mut file_contents_matches);
             files
         } else {
@@ -254,7 +270,7 @@ impl Files {
             let mut lock = store.lock().await;
             // This lock needs to be held until we are finish with initalisation
 
-            let index = Index::load("index").await;
+            let index = FileIndex::open().ok();
 
             *lock = index;
 

@@ -1,4 +1,4 @@
-use glimpse::indexing;
+use glimpse::file_index;
 use savefile_derive::Savefile;
 use std::collections::HashMap;
 
@@ -19,7 +19,7 @@ impl Biases {
     }
 
     pub fn load(name: &str) -> Biases {
-        match std::fs::File::open(indexing::PATH.join(name).with_extension("bin")) {
+        match std::fs::File::open(file_index::PATH.join(name).with_extension("bin")) {
             Ok(mut file) => match savefile::load(&mut file, 0) {
                 Ok(biases) => biases,
                 Err(_) => Biases::new(),
@@ -29,7 +29,7 @@ impl Biases {
     }
 
     pub fn save(&self, name: &str) {
-        let path = indexing::PATH.join(name).with_extension("bin");
+        let path = file_index::PATH.join(name).with_extension("bin");
         let mut file = std::fs::File::create(path).unwrap();
         savefile::save(&mut file, 0, self).unwrap();
     }
@@ -46,11 +46,13 @@ pub fn increment_bias(id: u64, amount: f32) {
 
     bias += amount;
 
-    if bias > 2.0 {
-        bias = 2.0;
+    if bias > 2.5 {
+        bias = 2.5;
     }
 
     biases.map.insert(id, bias);
+
+    println!("Incremented bias for {} to {}", id, bias);
 
     biases.save("biases");
 }

@@ -13,14 +13,13 @@ use crate::{
     result_templates::standard_entry,
     search::string_search,
     utils::{self, is_cli_app, benchmark, HashFn, simple_hash_nonce},
-    BoxedRuntime,
+    app::BoxedRuntime,
 };
 
 use super::{SearchModule, SearchResult};
 
 pub struct Commands {
     apps: Arc<tokio::sync::Mutex<Option<Vec<String>>>>,
-    hash: HashFn
 }
 
 unsafe impl Send for Commands {}
@@ -44,9 +43,7 @@ impl Commands {
             println!("Commands module loaded in {:?}", benchmark.elapsed().unwrap());
         }
 
-        let hash = simple_hash_nonce("commands");
-
-        Commands { apps: apps_store, hash }
+        Commands { apps: apps_store }
     }
 
     fn create_result(&self, name: String, relevance: f32) -> SearchResult {
@@ -64,7 +61,9 @@ impl Commands {
             standard_entry(name, icon, desc)
         };
 
-        let id = (*self.hash)(&*name);
+        let hash = simple_hash_nonce(&*self.name());
+
+        let id = hash(&*name);
 
         let run = move || {
             if is_cli_app(&name) {
@@ -73,6 +72,8 @@ impl Commands {
                 let _ = execute_detached(name.clone());
             }
         };
+
+
 
         SearchResult {
             render: Box::new(render),

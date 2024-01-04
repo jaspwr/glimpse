@@ -5,54 +5,57 @@ use lopdf::Document;
 
 use glimpse::{
     config::CONF,
-    indexing::{tokenize_string, Index, self},
+    db::string_search_db::StringSearchDb,
+    file_index::{self, tokenize_string, FileIndex},
 };
 
 fn main() {
     if CONF.modules.files {
-        if indexing::is_locked() {
+        if file_index::is_locked() {
             println!("Lock file exists, skipping indexing.");
             return;
         }
 
-        indexing::lock().expect("Failed to lock index.");
+        file_index::lock().expect("Failed to lock file index.");
         reindex();
-        indexing::unlock();
+        file_index::unlock();
     }
 }
 
 fn reindex() {
-    let mut files: Vec<PathBuf> = vec![];
-    let mut dirs: Vec<PathBuf> = vec![];
+    let mut idx = FileIndex::open().unwrap();
 
     for path in &CONF.search_paths {
         let _ = index_dir(
             &path,
             &CONF.search_hidden_folders,
-            &mut files,
-            &mut dirs,
+            idx.files.clone(),
+            idx.dirs.clone(),
             &CONF.ignore_directories,
         );
     }
 
-    let tf_idf = create_token_to_document_map(&files);
+    idx.dirs.save_meta();
+    idx.files.save_meta();
 
-    let files = files
-        .into_iter()
-        .map(|path| path.to_str().unwrap().to_string())
-        .collect();
+    // let tf_idf = create_token_to_document_map(&files);
 
-    let dirs = dirs
-        .into_iter()
-        .map(|path| path.to_str().unwrap().to_string())
-        .collect();
+    // let files = files
+    //     .into_iter()
+    //     .map(|path| path.to_str().unwrap().to_string())
+    //     .collect();
 
-    Index {
-        files,
-        dirs,
-        tf_idf,
-    }
-    .save("index");
+    // let dirs = dirs
+    //     .into_iter()
+    //     .map(|path| path.to_str().unwrap().to_string())
+    //     .collect();
+
+    // FileIndex {
+    //     files,
+    //     dirs,
+    //     tf_idf,
+    // }
+    // .save("index");
 }
 
 #[inline]
@@ -63,8 +66,8 @@ fn is_hidden_file(file: &DirEntry) -> bool {
 fn index_dir(
     path: &PathBuf,
     index_hidden: &bool,
-    files: &mut Vec<PathBuf>,
-    dirs: &mut Vec<PathBuf>,
+    files: StringSearchDb,
+    mut dirs: StringSearchDb,
     ignore_dirs: &Vec<String>,
 ) -> Result<(), std::io::Error> {
     if ignore_dirs.contains(&path.file_name().unwrap().to_str().unwrap().to_string()) {
@@ -73,10 +76,19 @@ fn index_dir(
 
     let mut dir = std::fs::read_dir(&path)?;
 
-    dirs.push(path.clone());
+    let folder_name = path.file_name().unwrap().to_str().unwrap().to_string();
+    let dir_name = path.to_str().unwrap().to_string();
+
+    dirs.insert(folder_name, Some(dir_name));
 
     while let Some(entry) = dir.next() {
-        let _ = handle_dir_entry(entry, index_hidden, files, dirs, ignore_dirs);
+        let _ = handle_dir_entry(
+            entry,
+            index_hidden,
+            files.clone(),
+            dirs.clone(),
+            ignore_dirs,
+        );
     }
 
     Ok(())
@@ -85,8 +97,8 @@ fn index_dir(
 fn handle_dir_entry(
     entry: Result<DirEntry, std::io::Error>,
     index_hidden: &bool,
-    files: &mut Vec<PathBuf>,
-    dirs: &mut Vec<PathBuf>,
+    mut files: StringSearchDb,
+    dirs: StringSearchDb,
     ignore_dirs: &Vec<String>,
 ) -> Result<(), std::io::Error> {
     let entry = entry?;
@@ -100,7 +112,11 @@ fn handle_dir_entry(
         if !index_hidden && is_hidden_file(&entry) {
             return Ok(());
         }
-        files.push(entry.path());
+
+        let file_name = entry.file_name().to_str().unwrap().to_string();
+        let file_path = entry.path().to_str().unwrap().to_string();
+
+        files.insert(file_name, Some(file_path));
         // TODO
     }
     Ok(())

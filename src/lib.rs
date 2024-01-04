@@ -1,3 +1,4 @@
 pub mod config;
-pub mod indexing;
+pub mod file_index;
 pub mod prelude;
+pub mod db;

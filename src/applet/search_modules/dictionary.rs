@@ -17,6 +17,10 @@ impl Dictionary {
 #[async_trait]
 impl SearchModule for Dictionary {
     async fn search(&self, query: String, _: u32) -> Vec<SearchResult> {
+        if query.len() == 0 {
+            return vec![];
+        }
+
         // wait 0.5 seconds to allow the user to type more
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
@@ -65,10 +69,7 @@ fn create_result(response: String, relevance: f32) -> Option<SearchResult> {
         Err(_) => return None,
     };
 
-    let word = match response[0]["word"].as_str() {
-        Some(word) => word.to_string(),
-        None => return None,
-    };
+    let word = response[0]["word"].as_str()?.to_string();
 
     let phonetics = response[0]["phonetics"][1]["text"]
         .as_str()

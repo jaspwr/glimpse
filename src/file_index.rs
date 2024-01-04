@@ -1,10 +1,13 @@
 use std::{collections::HashMap, fs, io::Write, path::PathBuf};
 
 use chrono;
-use gdk::glib::once_cell::sync::Lazy;
+
+use once_cell::sync::Lazy;
+
 use savefile_derive::Savefile;
 
 use crate::config::CONF;
+use crate::db::string_search_db::StringSearchDb;
 use crate::prelude::*;
 
 pub static PATH: Lazy<PathBuf> = Lazy::new(|| {
@@ -21,10 +24,9 @@ pub static LOCK_PATH: Lazy<PathBuf> = Lazy::new(|| PATH.join("lock"));
 
 pub static LAST_INDEXED_PATH: Lazy<PathBuf> = Lazy::new(|| PATH.join("last_indexed"));
 
-#[derive(Savefile)]
-pub struct Index {
-    pub files: Vec<String>,
-    pub dirs: Vec<String>,
+pub struct FileIndex {
+    pub files: StringSearchDb,
+    pub dirs: StringSearchDb,
     pub tf_idf: HashMap<String, Vec<(PathBuf, f32)>>,
 }
 
@@ -76,24 +78,34 @@ fn unlock_if_old() -> Option<bool> {
     None
 }
 
-impl Index {
-    pub fn save(&self, name: &str) {
-        let path = PATH.join(name).with_extension("bin");
-        let mut file = fs::File::create(path).unwrap();
-        savefile::save(&mut file, 0, self).unwrap();
-        set_last_indexed();
-    }
+impl FileIndex {
+    pub fn open() -> Result<FileIndex, Box<dyn std::error::Error>> {
+        let files = StringSearchDb::open(PATH.join("files"));
+        let dirs = StringSearchDb::open(PATH.join("dirs"));
+        let tf_idf = HashMap::new();
 
-    pub async fn load(name: &str) -> Option<Index> {
-        match fs::File::open(PATH.join(name).with_extension("bin")) {
-            Ok(mut file) => match savefile::load(&mut file, 0) {
-                Ok(index) => Some(index),
-                Err(_) => None,
-            },
-            Err(_) => None,
-        }
+        Ok(FileIndex { files, dirs, tf_idf })
     }
 }
+
+// impl Index {
+//     pub fn save(&self, name: &str) {
+//         let path = PATH.join(name).with_extension("bin");
+//         let mut file = fs::File::create(path).unwrap();
+//         savefile::save(&mut file, 0, self).unwrap();
+//         set_last_indexed();
+//     }
+
+//     pub async fn load(name: &str) -> Option<Index> {
+//         match fs::File::open(PATH.join(name).with_extension("bin")) {
+//             Ok(mut file) => match savefile::load(&mut file, 0) {
+//                 Ok(index) => Some(index),
+//                 Err(_) => None,
+//             },
+//             Err(_) => None,
+//         }
+//     }
+// }
 
 const WORD_BUF_SIZE: usize = 100;
 

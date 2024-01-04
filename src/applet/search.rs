@@ -9,6 +9,10 @@ pub fn string_search(
 ) -> Vec<(String, f32)> {
     let mut results = Vec::<(String, f32)>::new();
 
+    if needle.len() == 0 {
+        return results;
+    }
+
     let mut needle = needle.clone();
     if !case_sensitive {
         needle = needle.to_lowercase();
