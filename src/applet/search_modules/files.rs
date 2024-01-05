@@ -34,6 +34,7 @@ impl SearchModule for Files {
             return vec![];
         }
 
+        // tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
         let mut index = self.index.lock().await;
 

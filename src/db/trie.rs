@@ -87,7 +87,7 @@ impl DBTrie {
     pub fn fuzzy_get(&self, db: &mut DBSession, word: &str) -> Vec<String> {
         let mut matches = vec![];
 
-        fuzzy_get(self.root.clone(), db, &mut matches, word, 0);
+        fuzzy_get(self.root.clone(), db, &mut matches, word);
 
         matches
     }
@@ -169,15 +169,12 @@ impl DBTrieNode {
     //     if there are no nodes for the current char, branch into
     //     all of other children with the current char
 
-    pub fn fuzzy_get(
-        &self,
-        db: &mut DBSession,
-        word: &str,
-        matched: u32,
-    ) -> Vec<String> {
-        let mut chars = word.chars();
+    pub fn fuzzy_get(&self, db: &mut DBSession, word: &str, matches: &mut Vec<String>) {
+        if matches.len() > 20 {
+            return;
+        }
 
-        let mut matches = vec![];
+        let mut chars = word.chars();
 
         let children = self.children.to_ptr();
         let children = db.borrow_mut(&children);
@@ -188,55 +185,53 @@ impl DBTrieNode {
             let rest = chars.as_str();
 
             if let Some(node) = self.get_child_from_char(db, c) {
-                fuzzy_get(node, db, &mut matches, rest, matched + 1);
+                fuzzy_get(node, db, matches, rest);
             } else {
                 // There were no nodes for the current char.
 
-                if children.len(db) < 15 {
+                if children.len(db) < 4 {
                     for (_, child) in children.into_iter(db) {
-                        fuzzy_get(child, db, &mut matches, rest, matched + 1)
+                        fuzzy_get(child, db, matches, rest)
                     }
                 }
 
                 // Correct extra char
                 if !rest.is_empty() {
-                    self.fuzzy_get(db, rest, matched);
+                    self.fuzzy_get(db, rest, matches);
                 }
             }
         } else {
-            matches.extend(self.get_all_matches(db));
+            self.get_all_matches(db, matches);
         }
-
-        matches
     }
 
-    fn get_all_matches(&self, db: &mut DBSession) -> Vec<String> {
+    fn get_all_matches(&self, db: &mut DBSession, matches: &mut Vec<String>) {
         let children = self.children.to_ptr();
         let children = db.borrow_mut(&children);
         assert!(children.len() == 1);
         let children = children[0].clone();
 
-        let mut matches = vec![];
-
         let ptr = self.points_to.clone();
-        push_matches(ptr, db, &mut matches);
+        push_matches(ptr, db, matches);
 
-        if children.len(db) > 15 {
-            return matches;
-        }
+        // if children.len(db) > 3 {
+        //     return;
+        // }
 
         let children = children.flatten(db);
 
         for (_, child) in children {
+            if matches.len() > 20 {
+                return;
+            }
+
+
             let child = child.to_ptr();
             let borrow = db.borrow_mut(&child);
             assert!(borrow.len() == 1);
             let child = borrow[0].clone();
-
-            matches.extend(child.get_all_matches(db));
+            child.get_all_matches(db, matches);
         }
-
-        matches
     }
 
     pub fn get_child_from_char(
@@ -258,14 +253,13 @@ fn fuzzy_get(
     db: &mut DBSession,
     matches: &mut Vec<String>,
     rest: &str,
-    matched: u32,
 ) {
     let ptr = node.to_ptr();
     let borrow = db.borrow_mut(&ptr);
     assert!(borrow.len() == 1);
     let node = borrow[0].clone();
 
-    matches.extend(node.fuzzy_get(db, rest, matched));
+    node.fuzzy_get(db, rest, matches);
 }
 
 fn allocate_string(db: &mut DBSession, points_to: &str) -> SerializableDBPointer<DBString> {

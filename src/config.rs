@@ -1,16 +1,18 @@
 use std::{
+    error::Error,
+    fs,
     io::{BufRead, BufReader},
-    path::PathBuf, error::Error, fs,
+    path::PathBuf,
 };
 
-use pango::glib::once_cell::sync::Lazy;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 
 pub static CONF: Lazy<Config> = Lazy::new(|| match load_config() {
     Ok(mut config) => {
         config.error = None;
         config
-    },
+    }
     Err(err) => {
         let mut ret = Config::default();
         ret.error = Some(err.to_string());
@@ -19,7 +21,11 @@ pub static CONF: Lazy<Config> = Lazy::new(|| match load_config() {
 });
 
 pub static CONF_FILE_PATH: Lazy<PathBuf> = Lazy::new(|| {
-    let path = home::home_dir().unwrap().join(".config").join("glimpse").join("config.toml");
+    let path = home::home_dir()
+        .unwrap()
+        .join(".config")
+        .join("glimpse")
+        .join("config.toml");
 
     if !path.exists() {
         std::fs::create_dir_all(&path).unwrap();
@@ -92,7 +98,7 @@ pub struct Modules {
     pub steam_games: bool,
     pub web_bookmarks: bool,
     pub calculator: bool,
-    pub online_modules: WebModules,
+    pub dictionary: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -101,12 +107,6 @@ pub struct Misc {
     pub display_file_and_directory_paths: bool,
     pub preferred_terminal: String,
     pub run_exes_with_wine: bool,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct WebModules {
-    pub web_search: bool,
-    pub dictionary: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -139,7 +139,6 @@ pub struct PreviewWindow {
     pub image_size: u32,
 }
 
-
 pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
     if let Some(home) = home::home_dir() {
         let config_path = home.join(".config").join("glimpse").join("config.toml");
@@ -155,7 +154,9 @@ pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
             let conf: Config = toml::from_str(&file)?;
 
             if conf.indexing.size_upper_bound_GiB < 0.0 {
-                return Err("Can't have negative size for upper bound of indexing.".to_string().into());
+                return Err("Can't have negative size for upper bound of indexing."
+                    .to_string()
+                    .into());
             }
 
             for path in &conf.search_paths {
@@ -222,10 +223,7 @@ impl Default for Config {
                 steam_games: true,
                 web_bookmarks: true,
                 calculator: true,
-                online_modules: WebModules {
-                    web_search: true,
-                    dictionary: true,
-                },
+                dictionary: true,
             },
             use_online_modules: true,
             search_paths: vec![home::home_dir().unwrap_or(PathBuf::from("/home"))],
@@ -238,15 +236,15 @@ impl Default for Config {
                 dark_result_borders: false,
             },
             window: Window {
-                width: 420,
-                height: 400,
+                width: 540,
+                height: 410,
             },
             preview_window: PreviewWindow {
                 enabled: true,
                 show_automatically: true,
                 show_on_key: String::from("Tab"),
                 width: 420,
-                image_size: 350
+                image_size: 350,
             },
             misc: Misc {
                 display_command_paths: false,

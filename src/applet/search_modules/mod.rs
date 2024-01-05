@@ -59,7 +59,7 @@ pub fn load_standard_modules(rt: BoxedRuntime) -> Vec<BoxedSearchModule> {
     }
 
     if CONF.use_online_modules {
-        if CONF.modules.online_modules.dictionary {
+        if CONF.modules.dictionary {
             ret.push(Box::new(dictionary::Dictionary::new()));
         }
     }

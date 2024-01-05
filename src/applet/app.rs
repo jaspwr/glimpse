@@ -309,10 +309,10 @@ pub fn run_app() {
 
         search_field.grab_focus();
 
-        // window.connect_focus_in_event(|window, _| {
-        //     grab_seat(&window.window().unwrap());
-        //     gtk::Inhibit(false)
-        // });
+        window.connect_focus_in_event(|window, _| {
+            grab_seat(&window.window().unwrap());
+            gtk::Inhibit(false)
+        });
 
         window.activate();
 

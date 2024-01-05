@@ -1,8 +1,7 @@
 use crate::file_index;
+use once_cell::sync::Lazy;
 use savefile_derive::Savefile;
 use std::collections::HashMap;
-
-use gdk::glib::once_cell::sync::Lazy;
 
 pub static BIASES: Lazy<Biases> = Lazy::new(|| Biases::load("biases"));
 
