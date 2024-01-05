@@ -1,25 +1,23 @@
-use bytemuck::{Pod, Zeroable};
-
 use crate::prelude::Relevance;
 
 use super::{
     allocator::{DBPointer, SerializableDBPointer},
     hashmap::DBHashMap,
+    list::DBList,
     session::DBSession,
     string::DBString,
 };
 
-#[derive(Clone, Copy)]
+#[repr(C)]
+#[derive(Clone)]
 pub struct DBTrie {
     root: SerializableDBPointer<DBTrieNode>,
 }
 
-unsafe impl Zeroable for DBTrie {}
-unsafe impl Pod for DBTrie {}
-
-#[derive(Clone, Copy)]
+#[repr(C)]
+#[derive(Clone)]
 pub struct DBTrieNode {
-    pub points_to: SerializableDBPointer<DBString>,
+    pub points_to: DBList<DBString>,
     pub children: SerializableDBPointer<DBHashMap<char, SerializableDBPointer<DBTrieNode>>>,
 }
 
@@ -33,18 +31,22 @@ impl DBTrie {
     }
 
     pub fn insert(&mut self, db: &mut DBSession, word: &str, points_to: &str) {
+        let word = word.to_lowercase();
+
         println!("inserting {:?} -> {:?}", word, points_to);
         let ptr = self.root.to_ptr();
         let mut borrow = db.borrow_mut(&ptr);
         assert!(borrow.len() == 1);
         let mut root = borrow[0].clone();
 
-        root.insert(db, word, points_to);
+        root.insert(db, &word, points_to);
 
-        assert!(self.get(db, word).iter().any(|(s, _)| s == points_to));
+        assert!(self.get(db, &word).iter().any(|s| s == points_to));
     }
 
-    pub fn get(&mut self, db: &mut DBSession, word: &str) -> Vec<(String, Relevance)> {
+    pub fn get(&mut self, db: &mut DBSession, word: &str) -> Vec<String> {
+        let word = word.to_lowercase();
+
         let mut matches = vec![];
 
         let ptr = self.root.to_ptr();
@@ -53,7 +55,7 @@ impl DBTrie {
         let mut current = borrow[0].clone();
 
         for c in word.chars() {
-            if let Some(next) = current.get(db, c) {
+            if let Some(next) = current.get_child_from_char(db, c) {
                 let ptr = next.to_ptr();
                 let mut borrow = db.borrow_mut(&ptr);
                 assert!(borrow.len() == 1);
@@ -73,32 +75,30 @@ impl DBTrie {
         //         break;
         //     }
 
-
         // }
 
-        let mut ptr = current.points_to.to_ptr();
+        let mut points_to = current.points_to;
 
-        push_string(ptr, 20.0, db, &mut matches);
+        push_matches(points_to, db, &mut matches);
 
         return matches;
     }
+
+    pub fn fuzzy_get(&self, db: &mut DBSession, word: &str) -> Vec<String> {
+        let mut matches = vec![];
+
+        fuzzy_get(self.root.clone(), db, &mut matches, word, 0);
+
+        matches
+    }
 }
 
-fn push_string(
-    ptr: DBPointer<DBString>,
-    relevance: Relevance,
-    db: &mut DBSession,
-    matches: &mut Vec<(String, f32)>,
-) {
-    if ptr.is_null {
-        return;
-    }
+fn push_matches(points_to: DBList<DBString>, db: &mut DBSession, matches: &mut Vec<String>) {
+    let points_to = points_to.iter(db).collect::<Vec<_>>();
 
-    let mut borrow = db.borrow_mut(&ptr);
-    assert!(borrow.len() == 1);
-    let points_to = borrow[0].clone();
+    let points_to = points_to.into_iter().map(|s| s.load_string(db));
 
-    matches.push((points_to.load_string(db), relevance));
+    matches.extend(points_to);
 }
 
 impl DBTrieNode {
@@ -108,14 +108,13 @@ impl DBTrieNode {
         let child_map = child_map.to_serializable();
 
         Self {
-            points_to: SerializableDBPointer::null(),
+            points_to: DBList::new(db),
             children: child_map,
         }
     }
 
     pub fn insert(&mut self, db: &mut DBSession, word: &str, points_to: &str) {
         let mut chars = word.chars();
-
 
         if let Some(c) = chars.next() {
             let rest = chars.as_str();
@@ -133,14 +132,14 @@ impl DBTrieNode {
                     borrow[0].clone().insert(db, rest, points_to);
                     return;
                 }
+                // End of string
 
-                let points_to = allocate_string(db, points_to);
+                let str = DBString::new(db, points_to.to_string());
 
                 let ptr = existing_node_.to_ptr();
-                let mut borrow = db.borrow_mut(&ptr);
+                let borrow = db.borrow_mut(&ptr);
                 assert!(borrow.len() == 1);
-                borrow[0].points_to = points_to;
-
+                borrow[0].points_to.clone().push(db, str);
             } else {
                 let mut new_node = DBTrieNode::new(db);
                 new_node.insert(db, rest, points_to);
@@ -151,13 +150,97 @@ impl DBTrieNode {
                 children.insert(db, c, new_node);
             }
         } else {
-            let points_to = allocate_string(db, points_to);
-            self.points_to = points_to;
+            let str = DBString::new(db, points_to.to_string());
+            self.points_to.push(db, str);
         }
     }
 
-    pub fn get(
-        &mut self,
+    // Fuzzy get
+    // Incorrect char correction
+    //     if there are no nodes for current char but number of child nodes
+    //     is low branch into all of them.
+    // Finish prefixes
+    //     if finished all chars but there are still child nodes, branch
+    //     into all of them
+    // Extra char correction
+    //     if there are very few or no nodes for the current char,
+    //     try the next char
+    // Missing char correction
+    //     if there are no nodes for the current char, branch into
+    //     all of other children with the current char
+
+    pub fn fuzzy_get(
+        &self,
+        db: &mut DBSession,
+        word: &str,
+        matched: u32,
+    ) -> Vec<String> {
+        let mut chars = word.chars();
+
+        let mut matches = vec![];
+
+        let children = self.children.to_ptr();
+        let children = db.borrow_mut(&children);
+        assert!(children.len() == 1);
+        let children = children[0].clone();
+
+        if let Some(c) = chars.next() {
+            let rest = chars.as_str();
+
+            if let Some(node) = self.get_child_from_char(db, c) {
+                fuzzy_get(node, db, &mut matches, rest, matched + 1);
+            } else {
+                // There were no nodes for the current char.
+
+                if children.len(db) < 15 {
+                    for (_, child) in children.into_iter(db) {
+                        fuzzy_get(child, db, &mut matches, rest, matched + 1)
+                    }
+                }
+
+                // Correct extra char
+                if !rest.is_empty() {
+                    self.fuzzy_get(db, rest, matched);
+                }
+            }
+        } else {
+            matches.extend(self.get_all_matches(db));
+        }
+
+        matches
+    }
+
+    fn get_all_matches(&self, db: &mut DBSession) -> Vec<String> {
+        let children = self.children.to_ptr();
+        let children = db.borrow_mut(&children);
+        assert!(children.len() == 1);
+        let children = children[0].clone();
+
+        let mut matches = vec![];
+
+        let ptr = self.points_to.clone();
+        push_matches(ptr, db, &mut matches);
+
+        if children.len(db) > 15 {
+            return matches;
+        }
+
+        let children = children.flatten(db);
+
+        for (_, child) in children {
+            let child = child.to_ptr();
+            let borrow = db.borrow_mut(&child);
+            assert!(borrow.len() == 1);
+            let child = borrow[0].clone();
+
+            matches.extend(child.get_all_matches(db));
+        }
+
+        matches
+    }
+
+    pub fn get_child_from_char(
+        &self,
         db: &mut DBSession,
         c: char,
     ) -> Option<SerializableDBPointer<DBTrieNode>> {
@@ -170,15 +253,27 @@ impl DBTrieNode {
     }
 }
 
+fn fuzzy_get(
+    node: SerializableDBPointer<DBTrieNode>,
+    db: &mut DBSession,
+    matches: &mut Vec<String>,
+    rest: &str,
+    matched: u32,
+) {
+    let ptr = node.to_ptr();
+    let borrow = db.borrow_mut(&ptr);
+    assert!(borrow.len() == 1);
+    let node = borrow[0].clone();
+
+    matches.extend(node.fuzzy_get(db, rest, matched));
+}
+
 fn allocate_string(db: &mut DBSession, points_to: &str) -> SerializableDBPointer<DBString> {
     let points_to = DBString::new(db, points_to.to_string());
     let points_to = db.alloc(vec![points_to]);
     let points_to = points_to.to_serializable();
     points_to
 }
-
-unsafe impl Zeroable for DBTrieNode {}
-unsafe impl Pod for DBTrieNode {}
 
 #[cfg(test)]
 mod tests {
@@ -202,8 +297,8 @@ mod tests {
         trie.insert(&mut session, "hello", "world");
         trie.insert(&mut session, "help", "asdhjkl");
 
-        assert_eq!(trie.get(&mut session, "hello")[0].0, "world".to_string());
-        assert_eq!(trie.get(&mut session, "help")[0].0, "asdhjkl".to_string());
+        assert_eq!(trie.get(&mut session, "hello")[0], "world".to_string());
+        assert_eq!(trie.get(&mut session, "help")[0], "asdhjkl".to_string());
 
         drop(session);
 

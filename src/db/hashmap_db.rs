@@ -6,7 +6,8 @@ use std::{
 
 use crate::db::allocator::SaveableDBPointer;
 
-use super::hashmap::{CompareWith, HashWithDBAccess};
+use super::allocator::CopyToDB;
+use super::hashmap::{CompareWith, EqWithDBAccess, HashWithDBAccess};
 use super::list::DBList;
 use super::string::DBString;
 use super::{hashmap::DBHashMap, session::DBSession};
@@ -14,8 +15,8 @@ use super::{hashmap::DBHashMap, session::DBSession};
 #[derive(Clone)]
 pub struct HashMapDB<K, V>
 where
-    K: Copy + 'static + HashWithDBAccess + PartialEq,
-    V: Copy + 'static,
+    K: Clone + HashWithDBAccess + EqWithDBAccess,
+    V: Clone,
 {
     db: Arc<Mutex<DBSession>>,
     map: DBHashMap<K, V>,
@@ -23,8 +24,8 @@ where
 
 impl<K_in_db, V> HashMapDB<K_in_db, V>
 where
-    K_in_db: Copy + 'static + HashWithDBAccess + PartialEq,
-    V: Copy + 'static,
+    K_in_db: Clone + HashWithDBAccess + EqWithDBAccess,
+    V: Clone,
 {
     pub fn open(path: PathBuf, buckets_count: usize) -> Self {
         let mut db = DBSession::open(path);
@@ -33,7 +34,7 @@ where
             let ptr = db.meta.pointer_store[0].to_ptr::<DBHashMap<K_in_db, V>>();
             let borrowed = db.borrow_mut(&ptr);
             assert!(borrowed.len() == 1);
-            borrowed[0].clone()
+            (*borrowed[0]).clone()
         } else {
             assert!(db.meta.pointer_store.len() == 0);
             let map = DBHashMap::<K_in_db, V>::new(&mut db, buckets_count);
@@ -79,19 +80,13 @@ where
         str
     }
 
-    pub fn new_list<T>(&mut self) -> DBList<T>
-    where
-        T: Copy + 'static,
-    {
+    pub fn new_list<T: Clone>(&mut self) -> DBList<T> {
         let mut db = self.db.lock().unwrap();
         let list = DBList::new(&mut db);
         list
     }
 
-    pub fn push_to_list<T>(&mut self, list: &mut DBList<T>, value: T)
-    where
-        T: Copy + 'static,
-    {
+    pub fn push_to_list<T: Clone>(&mut self, list: &mut DBList<T>, value: T) {
         let mut db = self.db.lock().unwrap();
         list.push(&mut db, value);
     }
@@ -101,10 +96,7 @@ where
         string.load_string(&mut db)
     }
 
-    pub fn get_list<T>(&mut self, list: &DBList<T>) -> Vec<T>
-    where
-        T: Copy + 'static,
-    {
+    pub fn get_list<T: Clone>(&mut self, list: &DBList<T>) -> Vec<T> {
         let mut db = self.db.lock().unwrap();
         list.iter(&mut db).collect()
     }

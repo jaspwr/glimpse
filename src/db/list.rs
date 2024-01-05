@@ -1,34 +1,42 @@
-use bytemuck::{Pod, Zeroable};
-use pango::glib::ffi::G_NORMALIZE_DEFAULT_COMPOSE;
-
-use super::{allocator::SerializableDBPointer, session::DBSession};
+use super::{
+    allocator::{CopyToDB, SerializableDBPointer},
+    session::DBSession,
+};
 
 type ListItemPtr<T> = SerializableDBPointer<DBListNode<T>>;
 
-#[derive(Clone, Copy)]
-pub struct DBList<T>
-where
-    T: Copy + 'static,
-{
+#[repr(C)]
+pub struct DBList<T: CopyToDB> {
     pub head: SerializableDBPointer<ListItemPtr<T>>,
 }
 
-unsafe impl<T> Zeroable for DBList<T> where T: Copy + 'static {}
-unsafe impl<T> Pod for DBList<T> where T: Copy + 'static {}
+impl<T: CopyToDB> Clone for DBList<T> {
+    fn clone(&self) -> Self {
+        Self {
+            head: self.head.clone(),
+        }
+    }
+}
 
-#[derive(Clone, Copy)]
-pub struct DBListNode<T>
-where
-    T: Copy + 'static,
-{
+#[repr(C)]
+pub struct DBListNode<T> {
     pub next: ListItemPtr<T>,
     pub value: T,
 }
 
-unsafe impl<T> Zeroable for DBListNode<T> where T: Copy + 'static {}
-unsafe impl<T> Pod for DBListNode<T> where T: Copy + 'static {}
+impl<T: CopyToDB> CopyToDB for DBListNode<T> {
+    fn copy_to_db(&self) -> Self {
+        Self {
+            next: self.next.clone(),
+            value: self.value.copy_to_db(),
+        }
+    }
+}
 
-impl<T: Copy + 'static> DBList<T> {
+impl<T> DBList<T>
+where
+    T: CopyToDB,
+{
     pub fn new(db: &mut DBSession) -> Self {
         let head = SerializableDBPointer::null();
         let head = db.alloc(vec![head]);
@@ -48,7 +56,9 @@ impl<T: Copy + 'static> DBList<T> {
         self.set_head(db, new_head.to_serializable());
     }
 
-    pub fn remove(&mut self, db: &mut DBSession, cmp: impl Fn(T) -> bool) {
+    pub fn remove(&mut self, db: &mut DBSession, cmp: impl Fn(&T, &mut DBSession) -> bool)
+    where T: Clone
+    {
         let mut current = self.fetch_current_head(db);
 
         let mut prev = SerializableDBPointer::<DBListNode<T>>::null();
@@ -58,18 +68,19 @@ impl<T: Copy + 'static> DBList<T> {
             let borrowed = db.borrow_mut(&ptr);
             assert!(borrowed.len() == 1);
 
-            let node = &borrowed[0].clone();
+            let node = &borrowed[0];
+            let next_ptr = node.next.clone();
 
-            if cmp(node.value) {
+            if cmp(&node.value.clone(), db) {
                 if prev.is_null {
-                    self.set_head(db, node.next);
+                    self.set_head(db, next_ptr);
                 } else {
                     let prev_ptr = prev.to_ptr();
                     let mut prev_borrowed = db.borrow_mut(&prev_ptr);
                     assert!(prev_borrowed.len() == 1);
 
                     let prev_node = &mut prev_borrowed[0];
-                    prev_node.next = node.next;
+                    prev_node.next = next_ptr;
                 }
 
                 db.dealloc(ptr);
@@ -77,7 +88,7 @@ impl<T: Copy + 'static> DBList<T> {
             }
 
             prev = current;
-            current = node.next;
+            current = next_ptr;
         }
     }
 
@@ -95,7 +106,8 @@ impl<T: Copy + 'static> DBList<T> {
         head_borrowed[0].clone()
     }
 
-    pub fn iter<'a>(&'a self, db: &'a mut DBSession) -> DBListIter<'a, T> {
+    pub fn iter<'a>(&'a self, db: &'a mut DBSession) -> DBListIter<'a, T>
+    where T: Clone {
         let current_head = self.fetch_current_head(db);
 
         DBListIter {
@@ -105,15 +117,12 @@ impl<T: Copy + 'static> DBList<T> {
     }
 }
 
-pub struct DBListIter<'a, T>
-where
-    T: Copy + 'static,
-{
+pub struct DBListIter<'a, T: Clone> {
     db: &'a mut DBSession,
     current: SerializableDBPointer<DBListNode<T>>,
 }
 
-impl<'a, T: Copy + 'static> Iterator for DBListIter<'a, T> {
+impl<'a, T: Clone> Iterator for DBListIter<'a, T> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -121,14 +130,14 @@ impl<'a, T: Copy + 'static> Iterator for DBListIter<'a, T> {
             return None;
         }
 
-        let ptr = self.current.to_ptr();
+        let ptr = self.current.clone().to_ptr();
         let borrowed = self.db.borrow_mut(&ptr);
         assert!(borrowed.len() == 1);
 
         let node = &borrowed[0];
 
-        self.current = node.next;
-        Some(node.value)
+        self.current = node.next.clone();
+        Some(node.value.clone())
     }
 }
 
@@ -165,12 +174,12 @@ mod tests {
             assert_eq!(i as u32 + 1, value);
         }
 
-        list.remove(&mut session, Box::new(|value| value == 1));
+        list.remove(&mut session, |value, _| *value == 1);
 
         list.push(&mut session, 99);
 
-        list.remove(&mut session, Box::new(|value| value == 4));
-        list.remove(&mut session, Box::new(|value| value == 5));
+        list.remove(&mut session, |value, _| *value == 4);
+        list.remove(&mut session, |value, _| *value == 5);
 
         let list_vec = list.iter(&mut session).collect::<Vec<u32>>();
 

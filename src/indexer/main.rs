@@ -143,19 +143,22 @@ fn create_token_to_document_map(mut map: TfIdfMap, documents: &Vec<PathBuf>) -> 
 
     for (path, tf_idf) in doc_to_tf_idf {
         for (token, tf_idf) in tf_idf {
+            if token.len() < 2 {
+                continue;
+            }
+
             let allocated_token = map.alloc_string(token.clone());
             let mut doc_list = if let Some(list) = map.get(token.clone()) {
                 list
             } else {
                 let list = map.new_list();
-                map.insert(allocated_token, list);
+                map.insert(allocated_token, list.clone());
                 list
             };
 
             // let doc_vec = token_to_document.entry(token).or_insert(vec![]);
 
-            if tf_idf > 5.0 {
-                println!("appending");
+            if tf_idf > 0. {
                 let allocated_path = map.alloc_string(path.to_str().unwrap().to_string());
 
                 map.push_to_list(&mut doc_list, (tf_idf, allocated_path));

@@ -1,17 +1,13 @@
 use std::{collections::hash_map::DefaultHasher, hash::Hasher};
 
-use bytemuck::{Zeroable, Pod};
-
 use super::{
     allocator::{DBPointer, SerializableDBPointer},
-    session::DBSession, hashmap::{HashWithDBAccess},
+    session::DBSession, hashmap::{HashWithDBAccess, EqWithDBAccess},
 };
 
-#[derive(Clone, Copy)]
+#[repr(C)]
+#[derive(Clone)]
 pub struct DBString(SerializableDBPointer<u8>);
-
-unsafe impl Zeroable for DBString {}
-unsafe impl Pod for DBString {}
 
 impl DBString {
     pub fn new(db: &mut DBSession, str: String) -> Self {
@@ -24,8 +20,8 @@ impl DBString {
         let ptr = self.0.to_ptr();
         let bytes = db
             .borrow_mut(&ptr)
-            .iter()
-            .map(|b| **b.clone())
+            .into_iter()
+            .map(|b| *b)
             .collect::<Vec<u8>>();
         String::from_utf8(bytes).unwrap()
     }
@@ -44,9 +40,11 @@ impl HashWithDBAccess for DBString {
     }
 }
 
-impl PartialEq for DBString {
-    fn eq(&self, other: &Self) -> bool {
-        true
+impl EqWithDBAccess for DBString {
+    fn eq(&self, other: &Self, db: &mut DBSession) -> bool {
+        let lhs = self.load_string(db);
+        let rhs = other.load_string(db);
+        lhs == rhs
     }
 }
 

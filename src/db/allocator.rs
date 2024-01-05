@@ -1,18 +1,17 @@
 use std::marker::PhantomData;
 
-use bytemuck::{Pod, Zeroable};
 use bytes::Bytes;
 use savefile_derive::Savefile;
 
 use super::session::DBSession;
 
-#[derive(PartialEq, PartialOrd, Clone, Copy, Savefile, Debug)]
+#[derive(PartialEq, PartialOrd, Savefile, Debug, Clone, Copy)]
 #[repr(C)]
 pub struct Address(pub usize);
-#[derive(PartialEq, PartialOrd, Clone, Copy, Savefile, Debug)]
+#[derive(PartialEq, PartialOrd, Savefile, Debug, Clone, Copy)]
 #[repr(C)]
 pub struct BytesLength(pub usize);
-#[derive(PartialEq, PartialOrd, Clone, Copy, Savefile, Debug)]
+#[derive(PartialEq, PartialOrd, Savefile, Debug, Clone, Copy)]
 #[repr(C)]
 pub struct ArrayLength(pub usize);
 
@@ -37,7 +36,7 @@ impl BytesLength {
     }
 }
 
-#[derive(Clone, Copy, Savefile, Debug)]
+#[derive(Savefile, Debug, Clone)]
 #[repr(C)]
 pub struct DBChunkDescriptor {
     pub start: Address,
@@ -63,7 +62,7 @@ pub struct DBPointer<T> {
     pub phantom: PhantomData<T>,
 }
 
-impl<T: Copy + 'static> DBPointer<T> {
+impl<T> DBPointer<T> {
     pub fn to_serializable(self) -> SerializableDBPointer<T> {
         SerializableDBPointer {
             is_null: self.is_null,
@@ -80,27 +79,30 @@ impl<T: Copy + 'static> DBPointer<T> {
 /// takes care of this by taking ownership of the pointer but
 /// if the pointer has Copy then this breaks and use after free
 /// becomes possible.
-#[derive(Clone, Copy)]
 #[repr(C)]
-pub struct SerializableDBPointer<T>
-where
-    T: Copy + 'static,
-{
+pub struct SerializableDBPointer<T> {
     pub chunk: DBChunkDescriptor,
     pub length: ArrayLength,
     pub phantom: PhantomData<T>,
     pub is_null: bool,
 }
 
+impl<T> Clone for SerializableDBPointer<T> {
+    fn clone(&self) -> Self {
+        Self {
+            chunk: self.chunk.clone(),
+            length: self.length.clone(),
+            phantom: PhantomData,
+            is_null: self.is_null.clone(),
+        }
+    }
+}
 
-impl<T> SerializableDBPointer<T>
-where
-    T: Copy + 'static,
-{
-    pub fn to_ptr(self) -> DBPointer<T> {
+impl<T> SerializableDBPointer<T> {
+    pub fn to_ptr(&self) -> DBPointer<T> {
         DBPointer {
             is_null: self.is_null,
-            chunk: self.chunk,
+            chunk: self.chunk.clone(),
             length: self.length,
             phantom: self.phantom,
         }
@@ -116,20 +118,17 @@ where
     }
 }
 
-unsafe impl<T: Copy + 'static> Pod for SerializableDBPointer<T> {}
-unsafe impl<T: Copy + 'static> Zeroable for SerializableDBPointer<T> {}
-
-#[derive(Clone, Copy, Savefile, Debug)]
+#[derive(Savefile, Debug)]
 pub struct SaveableDBPointer {
     pub chunk: DBChunkDescriptor,
     pub length: ArrayLength,
 }
 
 impl SaveableDBPointer {
-    pub fn to_ptr<T>(self) -> DBPointer<T> {
+    pub fn to_ptr<T>(&self) -> DBPointer<T> {
         DBPointer {
             is_null: false,
-            chunk: self.chunk,
+            chunk: self.chunk.clone(),
             length: self.length,
             phantom: PhantomData,
         }
@@ -143,11 +142,22 @@ impl SaveableDBPointer {
     }
 }
 
+pub trait CopyToDB {
+    fn copy_to_db(&self) -> Self;
+}
+
+impl<T> CopyToDB for T
+where
+    T: Clone,
+{
+    fn copy_to_db(&self) -> Self {
+        self.clone()
+    }
+}
+
+
 impl DBSession {
-    pub fn alloc<T>(&mut self, value: Vec<T>) -> DBPointer<T>
-    where
-        T: Clone,
-    {
+    pub fn alloc<T: CopyToDB>(&mut self, value: Vec<T>) -> DBPointer<T> {
         let len = ArrayLength(value.len());
 
         assert!(len.0 > 0);
@@ -160,7 +170,7 @@ impl DBSession {
         let mut borrowed = self.borrow_mut_raw::<T>(chunk.start, len);
 
         for (i, borrowed_item) in borrowed.iter_mut().enumerate() {
-            **borrowed_item = value[i].clone();
+            **borrowed_item = value[i].copy_to_db();
         }
 
         drop(borrowed);
@@ -173,10 +183,8 @@ impl DBSession {
         }
     }
 
-    pub fn borrow_mut<'a, T>(&'a mut self, ptr: &DBPointer<T>) -> Vec<&'a mut T>
-    {
+    pub fn borrow_mut<'a, T>(&'a mut self, ptr: &DBPointer<T>) -> Vec<&'a mut T> {
         assert!(!ptr.is_null);
-
 
         let type_size = std::mem::size_of::<T>();
         let buffer_size = ptr.length.0 * type_size;
@@ -185,10 +193,7 @@ impl DBSession {
         self.borrow_mut_raw(ptr.chunk.start, ptr.length)
     }
 
-    pub fn dealloc<T>(&mut self, ptr: DBPointer<T>)
-    where
-        T: Pod,
-    {
+    pub fn dealloc<T>(&mut self, ptr: DBPointer<T>) {
         assert!(!ptr.is_null);
 
         self.free(ptr.chunk);
@@ -297,8 +302,6 @@ fn overlapping_chunks(chunks: &Vec<DBChunkDescriptor>) -> bool {
 mod tests {
     use std::{fs, path::PathBuf};
 
-    use bytemuck::{Pod, Zeroable};
-
     use crate::db::{
         allocator::{overlapping_chunks, Address, ArrayLength, BytesLength},
         session::{meta_path, DBSession},
@@ -310,10 +313,8 @@ mod tests {
         }
     }
 
-    unsafe impl Pod for TestStruct {}
-    unsafe impl Zeroable for TestStruct {}
-
     #[derive(Clone, Copy, Debug)]
+    #[allow(unused)]
     struct TestStruct {
         a: i32,
         b: f64,

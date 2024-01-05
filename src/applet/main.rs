@@ -1,6 +1,4 @@
 #[cfg(feature = "app")]
-mod biases;
-#[cfg(feature = "app")]
 mod exec;
 #[cfg(feature = "app")]
 mod icon;

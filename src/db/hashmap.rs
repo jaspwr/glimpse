@@ -1,68 +1,77 @@
-use bytemuck::{Pod, Zeroable};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
 
+use super::allocator::CopyToDB;
 use super::string::DBString;
 use super::{allocator::SerializableDBPointer, list::DBList, session::DBSession};
 
-#[derive(Clone, Copy)]
-pub struct DBHashMap<K, V>
-where
-    K: Copy + 'static,
-    V: Copy + 'static,
-{
+#[repr(C)]
+#[derive(Clone)]
+pub struct DBHashMap<K: Clone, V: Clone> {
     inner: SerializableDBPointer<__DBHashMap<K, V>>,
 }
 
-#[derive(Clone, Copy)]
-struct __DBHashMap<K, V>
-where
-    K: Copy + 'static,
-    V: Copy + 'static,
-{
-    buckets: SerializableDBPointer<DBList<(K, V)>>,
+type Bucket<K, V> = DBList<KeyValuePair<K, V>>;
+
+#[repr(C)]
+struct __DBHashMap<K: Clone, V: Clone> {
+    buckets: SerializableDBPointer<Bucket<K, V>>,
     buckets_count: usize,
     length: usize,
     last_bucket_written_to: usize,
 }
 
-unsafe impl<K, V> Zeroable for __DBHashMap<K, V>
-where
-    K: Copy + 'static,
-    V: Copy + 'static,
-{
+impl<K: Clone, V: Clone> CopyToDB for __DBHashMap<K, V> {
+    fn copy_to_db(&self) -> Self {
+        Self {
+            buckets: self.buckets.clone(),
+            buckets_count: self.buckets_count,
+            length: self.length,
+            last_bucket_written_to: self.last_bucket_written_to,
+        }
+    }
 }
 
-unsafe impl<K, V> Pod for __DBHashMap<K, V>
-where
-    K: Copy + 'static,
-    V: Copy + 'static,
-{
+#[derive(Clone)]
+pub struct KeyValuePair<K: Clone, V: Clone> {
+    pub key: K,
+    pub value: V,
 }
 
-unsafe impl<K, V> Zeroable for DBHashMap<K, V>
-where
-    K: Copy + 'static,
-    V: Copy + 'static,
-{
+// impl<K, V> CopyToDB for KeyValuePair<K, V>
+// where
+//     K: CopyToDB,
+//     V: CopyToDB,
+// {
+//     fn copy_to_db(&self) -> Self {
+//         Self {
+//             key: self.key.copy_to_db(),
+//             value: self.value.copy_to_db(),
+//         }
+//     }
+// }
+
+impl<K: Clone, V: Clone> From<(K, V)> for KeyValuePair<K, V> {
+    fn from((key, value): (K, V)) -> Self {
+        Self { key, value }
+    }
 }
 
-unsafe impl<K, V> Pod for DBHashMap<K, V>
-where
-    K: Copy + 'static,
-    V: Copy + 'static,
-{
+impl<K: Clone, V: Clone> Into<(K, V)> for KeyValuePair<K, V> {
+    fn into(self) -> (K, V) {
+        (self.key, self.value)
+    }
 }
 
 impl<K_in_db, V> DBHashMap<K_in_db, V>
 where
-    K_in_db: Copy + 'static + PartialEq + HashWithDBAccess,
-    V: Copy + 'static,
+    K_in_db: Clone + EqWithDBAccess + HashWithDBAccess,
+    V: Clone,
 {
     pub fn new(db: &mut DBSession, buckets_count: usize) -> Self {
         let buckets = (0..buckets_count)
-            .map(|_| DBList::<(K_in_db, V)>::new(db))
+            .map(|_| DBList::<KeyValuePair<K_in_db, V>>::new(db))
             .collect::<Vec<_>>();
 
         let buckets = db.alloc(buckets);
@@ -81,18 +90,19 @@ where
         DBHashMap::<K_in_db, V> { inner }
     }
 
-    pub fn get<'a, k_lookup>(&'a mut self, db: &'a mut DBSession, key: k_lookup) -> Option<V>
+    pub fn get<'a, kLookup>(&'a mut self, db: &'a mut DBSession, key: kLookup) -> Option<V>
     where
-        k_lookup: Hash + CompareWith<K_in_db>,
+        kLookup: Hash + CompareWith<K_in_db>,
     {
         let bucket = self.get_bucket(db, &key);
 
         // Ideally this would not have to be stored in a vector but
         // `db` needs to be borrowed again. Hopefully this gets optimised
         // out.
-        let key_value_pairs = bucket.iter(db).collect::<Vec<(K_in_db, V)>>();
+        let key_value_pairs = bucket.iter(db).collect::<Vec<KeyValuePair<K_in_db, V>>>();
 
-        for (k, v) in key_value_pairs {
+        for kvp in key_value_pairs {
+            let (k, v) = kvp.into();
             if key.compare_with(&k, db) {
                 return Some(v);
             }
@@ -104,18 +114,19 @@ where
     pub fn insert<'a>(&mut self, db: &'a mut DBSession, key: K_in_db, value: V) {
         let mut bucket = self.get_bucket(db, &key);
 
-
-        bucket.remove(db, |(k, _)| key == k);
-        bucket.push(db, (key, value));
+        bucket.remove(db, |kvp: &KeyValuePair<K_in_db, V>, db: &mut DBSession| {
+            key.eq(&kvp.key, db)
+        });
+        bucket.push(db, (key, value).into());
     }
 
-    fn get_bucket<'a, K_hashable>(
+    fn get_bucket<'a, KHashable>(
         &'a mut self,
         db: &mut DBSession,
-        key: &K_hashable,
-    ) -> DBList<(K_in_db, V)>
+        key: &KHashable,
+    ) -> Bucket<K_in_db, V>
     where
-        K_hashable: HashWithDBAccess,
+        KHashable: HashWithDBAccess,
     {
         let hash = key.hash(db) as usize;
 
@@ -133,7 +144,7 @@ where
 
         assert!(borrow.len() == buckets_count);
 
-        let bucket = borrow[bucket_index].clone();
+        let bucket = (*borrow[bucket_index]).clone();
         // This is just the list head it can be cloned as it only
         // contains a pointer.
 
@@ -141,7 +152,7 @@ where
     }
 
     pub fn len(&self, db: &mut DBSession) -> usize {
-        let ptr = self.inner.to_ptr();
+        let ptr = self.inner.clone().to_ptr();
         let inner_ptr = ptr;
         let mut borrow = db.borrow_mut(&inner_ptr);
         assert!(borrow.len() == 1);
@@ -149,6 +160,38 @@ where
 
         map.length
     }
+
+    pub fn flatten(&self, db: &mut DBSession) -> Vec<(K_in_db, V)> {
+        let ptr = self.inner.to_ptr();
+        let borrow = db.borrow_mut(&ptr);
+        assert!(borrow.len() == 1);
+        let map = &borrow[0];
+
+        let bucket_count = map.buckets_count;
+
+        let ptr = map.buckets.clone().to_ptr();
+        let buckets = db.borrow_mut(&ptr);
+        assert!(buckets.len() == bucket_count);
+
+        let mut items = vec![];
+
+        let buckets: Vec<Bucket<K_in_db, V>> = (0..bucket_count).into_iter().map(|bucket_index| {
+            buckets[bucket_index].clone()
+        }).collect();
+
+        for bucket_index in 0..bucket_count {
+            let bucket = buckets[bucket_index].clone();
+            let bucket_items = bucket.iter(db).collect::<Vec<_>>();
+            items.extend(bucket_items.into_iter().map(|kvp| kvp.into()));
+        }
+
+        items
+    }
+
+    pub fn into_iter(&self, db: &mut DBSession) -> <Vec<(K_in_db, V)> as IntoIterator>::IntoIter {
+        self.flatten(db).into_iter()
+    }
+
 }
 
 
@@ -186,6 +229,18 @@ where
     }
 }
 
+pub trait EqWithDBAccess {
+    fn eq(&self, other: &Self, db: &mut DBSession) -> bool;
+}
+
+impl<T> EqWithDBAccess for T
+where
+    T: PartialEq,
+{
+    fn eq(&self, other: &Self, _: &mut DBSession) -> bool {
+        self == other
+    }
+}
 
 #[cfg(test)]
 
@@ -215,15 +270,22 @@ mod tests {
         map.insert(&mut session, 123, 4);
         map.insert(&mut session, 12, 5);
         map.insert(&mut session, 12, 5);
-        // map.insert(&mut session, 12, 5);
-        // map.insert(&mut session, 12, 5);
-        // map.insert(&mut session, 12, 5);
-        // map.insert(&mut session, 12, 5);
+        map.insert(&mut session, 12, 5);
+        map.insert(&mut session, 12, 5);
+        map.insert(&mut session, 12, 5);
+        map.insert(&mut session, 12, 5);
 
-        // assert_eq!(map.get(&mut session, 123), Some(4));
-        // assert_eq!(map.get(&mut session, 12), Some(5));
+        assert_eq!(map.get(&mut session, 123), Some(4));
+        assert_eq!(map.get(&mut session, 12), Some(5));
         assert_eq!(map.get(&mut session, 112323), None);
         assert_eq!(map.get(&mut session, 13), None);
+
+        let flattened = map.flatten(&mut session);
+        // NOTE: Order is deterministic but not somewhat random.
+        assert_eq!(flattened, vec![
+            (123, 4),
+            (12, 5),
+        ]);
 
         let mut map_2 = DBHashMap::<u32, DBString>::new(&mut session, 1);
         let s1 = "TESTTESTTEST".to_string();

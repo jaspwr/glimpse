@@ -52,12 +52,12 @@ impl SearchModule for Files {
             //     .map(|(s, r)| self.create_result(&s, r, FileType::Dir, hash_fn(&*s)))
             //     .collect::<Vec<SearchResult>>();
 
-            let mut files = index.files.get(&query)
+            let mut files = index.files.get(&query, &hash_fn)
                 .into_iter()
                 .map(|(s, r)| self.create_result(&s, r, FileType::File, hash_fn(&*s)))
                 .collect::<Vec<SearchResult>>();
 
-            let mut dirs = index.dirs.get(&query)
+            let mut dirs = index.dirs.get(&query, &hash_fn)
                 .into_iter()
                 .map(|(s, r)| self.create_result(&s, r, FileType::Dir, hash_fn(&*s)))
                 .collect::<Vec<SearchResult>>();
@@ -218,7 +218,7 @@ fn is_windows_application(path: &String) -> bool {
 }
 
 fn find_file_icon_name(ext: &str) -> &str {
-    match ext {
+    match ext.to_lowercase().as_str() {
         "png" | "jpg" | "jpeg" | "gif" | "svg" => "image-x-generic",
         "mp3" | "wav" | "flac" | "ogg" => "audio-x-generic",
         "mp4" | "mkv" | "avi" | "webm" => "video-x-generic",

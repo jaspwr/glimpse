@@ -1,4 +1,4 @@
-use glimpse::file_index;
+use crate::file_index;
 use savefile_derive::Savefile;
 use std::collections::HashMap;
 

@@ -3,7 +3,6 @@ use std::{sync::{
     Arc, Mutex,
 }, path::PathBuf};
 
-use biases::increment_bias;
 use futures::{future::abortable, stream::AbortHandle};
 use gdk::glib::once_cell::sync::Lazy;
 use gdk::{glib::idle_add_once, SeatCapabilities};
@@ -12,13 +11,13 @@ use gtk::prelude::*;
 static CONTROL: AtomicBool = AtomicBool::new(false);
 
 use glimpse::{
-    config::{CONF, CONF_FILE_PATH, CSS}, db::string_search_db::{StringSearchDb},
+    config::{CONF, CONF_FILE_PATH, CSS}, db::string_search_db::{StringSearchDb}, biases::increment_bias,
 };
 use preview_window::{PreviewWindowShowing, SafeBox};
 use search_modules::{SearchModule, SearchResult};
 use utils::benchmark;
 
-use crate::{biases, preview_window, search_modules, utils};
+use crate::{preview_window, search_modules, utils};
 
 pub static RUNTIME: Lazy<BoxedRuntime> = Lazy::new(|| {
     let rt = tokio::runtime::Runtime::new().unwrap();

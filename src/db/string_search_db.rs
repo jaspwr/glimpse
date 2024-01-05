@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::db::allocator::SaveableDBPointer;
+use crate::{db::allocator::SaveableDBPointer, string_similarity::word_similarity};
 
 use super::{session::DBSession, trie::DBTrie};
 
@@ -45,9 +45,19 @@ impl StringSearchDb {
             .insert(&mut db, word.as_str(), &points_to.unwrap());
     }
 
-    pub fn get(&mut self, word: &str) -> Vec<(String, f32)> {
+    pub fn get(&mut self, word: &str, id_hash: &Box<dyn Fn(&str) -> u64>) -> Vec<(String, f32)> {
         let mut db = self.db.lock().unwrap();
-        self.trie.get(&mut db, word)
+
+        let mut results = vec![];
+
+        results.extend(
+            self.trie
+                .fuzzy_get(&mut db, word)
+                .into_iter()
+                .map(|s| (s.clone(), word_similarity(&word.to_string(), s, id_hash))),
+        );
+
+        results
     }
 
     pub fn save_meta(&mut self) {
