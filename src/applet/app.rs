@@ -212,7 +212,7 @@ pub fn run_app() {
 
             handle_search_field_keypress(key, list);
 
-            Inhibit(false)
+            pango::glib::Propagation::Proceed
         });
 
         search_field.connect_key_release_event(|_, keyevent| {
@@ -220,7 +220,8 @@ pub fn run_app() {
             if key == gdk::keys::constants::Control_L || key == gdk::keys::constants::Control_R {
                 CONTROL.store(false, Ordering::Relaxed);
             }
-            Inhibit(false)
+
+            pango::glib::Propagation::Proceed
         });
 
         list.lock()
@@ -239,13 +240,13 @@ pub fn run_app() {
         list.lock()
             .unwrap()
             .list
-            .connect_key_press_event(move |list, key_event| -> Inhibit {
+            .connect_key_press_event(move |list, key_event| {
                 let key = key_event.keyval();
                 let search_field = search_field_cpy.clone();
 
                 handle_list_keypress(key, search_field, list);
 
-                Inhibit(false)
+                pango::glib::Propagation::Proceed
             });
 
         list.lock()
@@ -257,7 +258,7 @@ pub fn run_app() {
                 {
                     CONTROL.store(false, Ordering::Relaxed);
                 }
-                Inhibit(false)
+                pango::glib::Propagation::Proceed
             });
 
 
@@ -290,7 +291,7 @@ pub fn run_app() {
 
         window.connect_focus_in_event(|window, _| {
             grab_seat(&window.window().unwrap());
-            gtk::Inhibit(false)
+            pango::glib::Propagation::Proceed
         });
 
         window.activate();
@@ -763,7 +764,7 @@ fn grab_seat(window: &gtk::gdk::Window) {
 
     let status = seat.grab(
         window,
-        unsafe { SeatCapabilities::from_bits_unchecked(capabilities) },
+        SeatCapabilities::from_bits_truncate(capabilities),
         true,
         None,
         None,

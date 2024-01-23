@@ -46,6 +46,10 @@ impl StringSearchDb {
     }
 
     pub fn get(&mut self, word: &str, id_hash: &Box<dyn Fn(&str) -> u64>) -> Vec<(String, f32)> {
+        if word.len() < 3 {
+            return vec![];
+        }
+
         let mut db = self.db.lock().unwrap();
 
         let mut results = vec![];
