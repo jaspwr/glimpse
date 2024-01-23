@@ -32,27 +32,6 @@ pub static FAKE_FIRST_SELECTED: Lazy<Mutex<bool>> = Lazy::new(|| Mutex::new(fals
 pub type BoxedRuntime = Arc<Mutex<tokio::runtime::Runtime>>;
 
 pub fn run_app() {
-
-    // let mut db = StringSearchDb::open(PathBuf::from("/home/jasper/hi2"));
-    // db.insert("fucking".to_string(), Some("you".to_string()));
-    // db.insert("jasper".to_string(), Some("ya".to_string()));
-    // println!("READ {:?}", db.get("fucking"));
-    // println!("READ {:?}", db.get("jas"));
-    // println!("READ {:?}", db.get("jaas"));
-
-
-    // let mut db = HashMapDb::<i32, i32>::new(PathBuf::from("/home/jasper/temp/hi3"), 1);
-    // db.insert(9999, 123123);
-    // db.insert(999, 1231);
-    // db.insert(2999, 1212331);
-    // db.insert(2999, 121233);
-    // db.save_meta();
-    // println!("READ {:?}", db.get(&2999));
-    // println!("READ {:?}", db.get(&999));
-    // println!("READ {:?}", db.get(&9999));
-    // println!("READ {:?}", db.get(&99299));
-
-
     let application = gtk::Application::builder()
         .application_id("com.jaspwr.glimpse")
         .build();
