@@ -43,10 +43,13 @@ pub fn load_standard_modules(rt: BoxedRuntime) -> Vec<BoxedSearchModule> {
     if CONF.modules.files {
         if !file_index::is_locked() {
             if hasnt_indexed_for_days(2) {
+                println!("reindexing files");
                 let _ = execute_detached("glimpse-indexer".to_string());
             } else {
                 ret.push(Box::new(files::Files::new(rt.clone())));
             }
+        } else {
+            println!("File index lock exists");
         }
     }
 

@@ -191,3 +191,23 @@ fn append_word(word_buf: &[char; 100], word_buf_index: usize, tokens: &mut Vec<S
 
     tokens.push(token);
 }
+
+pub fn _tf_idf(corpus_size: usize, mut map: TfIdfMap, token: &String) -> Vec<(f32, DBString)> {
+    let appearances = match map.get(token) {
+        Some(list) => map.get_list(&list),
+        None => return vec![],
+    };
+
+    let appears_in = appearances.len() as f32;
+
+    if appears_in == 0.0 {
+        return vec![];
+    }
+
+    let idf = f32::ln(corpus_size as f32 / appears_in);
+
+    appearances
+        .into_iter()
+        .map(|(tf, doc)| (tf * idf, doc))
+        .collect()
+}

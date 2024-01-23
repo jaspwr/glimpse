@@ -1,12 +1,16 @@
-use std::{collections::HashMap, fs::DirEntry, path::{PathBuf, Path}};
+use std::{
+    collections::HashMap,
+    fs::DirEntry,
+    path::{Path, PathBuf},
+};
 
 use docx_rs::*;
 use lopdf::Document;
 
 use glimpse::{
     config::CONF,
-    db::string_search_db::StringSearchDb,
-    file_index::{self, tokenize_string, FileIndex, TfIdfMap},
+    db::{string::DBString, string_search_db::StringSearchDb},
+    file_index::{self, _tf_idf, set_last_indexed, tokenize_string, FileIndex, TfIdfMap},
 };
 
 fn main() {
@@ -23,18 +27,16 @@ fn main() {
 }
 
 fn reindex() {
+    set_last_indexed();
+
     FileIndex::reset_all();
     let mut idx = FileIndex::open().unwrap();
-
-    let mut files_list: Vec<PathBuf> = vec![];
 
     for path in &CONF.search_paths {
         let _ = index_dir(
             &path,
             &CONF.search_hidden_folders,
-            idx.files.clone(),
-            idx.dirs.clone(),
-            &mut files_list,
+            &mut idx,
             &CONF.ignore_directories,
         );
     }
@@ -42,7 +44,9 @@ fn reindex() {
     idx.dirs.save_meta();
     idx.files.save_meta();
 
-    create_token_to_document_map(idx.tf_idf.clone(), &files_list);
+    // create_token_to_document_map(idx.tf_idf.clone(), &files_list);
+
+    idx.tf_idf.save_meta();
 
     // let files = files
     //     .into_iter()
@@ -70,9 +74,7 @@ fn is_hidden_file(file: &DirEntry) -> bool {
 fn index_dir(
     path: &PathBuf,
     index_hidden: &bool,
-    files: StringSearchDb,
-    mut dirs: StringSearchDb,
-    files_names: &mut Vec<PathBuf>,
+    idx: &mut FileIndex,
     ignore_dirs: &Vec<String>,
 ) -> Result<(), std::io::Error> {
     if ignore_dirs.contains(&path.file_name().unwrap().to_str().unwrap().to_string()) {
@@ -84,17 +86,10 @@ fn index_dir(
     let folder_name = path.file_name().unwrap().to_str().unwrap().to_string();
     let dir_name = path.to_str().unwrap().to_string();
 
-    dirs.insert(folder_name, Some(dir_name));
+    idx.dirs.insert(folder_name, Some(dir_name));
 
     while let Some(entry) = dir.next() {
-        let _ = handle_dir_entry(
-            entry,
-            index_hidden,
-            files.clone(),
-            dirs.clone(),
-            files_names,
-            ignore_dirs,
-        );
+        let _ = handle_dir_entry(entry, index_hidden, idx, ignore_dirs);
     }
 
     Ok(())
@@ -103,9 +98,7 @@ fn index_dir(
 fn handle_dir_entry(
     entry: Result<DirEntry, std::io::Error>,
     index_hidden: &bool,
-    mut files: StringSearchDb,
-    dirs: StringSearchDb,
-    files_names: &mut Vec<PathBuf>,
+    idx: &mut FileIndex,
     ignore_dirs: &Vec<String>,
 ) -> Result<(), std::io::Error> {
     let entry = entry?;
@@ -114,7 +107,7 @@ fn handle_dir_entry(
         if !index_hidden && is_hidden_file(&entry) {
             return Ok(());
         }
-        let _ = index_dir(&entry.path(), index_hidden, files, dirs, files_names, ignore_dirs);
+        let _ = index_dir(&entry.path(), index_hidden, idx, ignore_dirs);
     } else {
         if !index_hidden && is_hidden_file(&entry) {
             return Ok(());
@@ -123,8 +116,9 @@ fn handle_dir_entry(
         let file_name = entry.file_name().to_str().unwrap().to_string();
         let file_path = entry.path().to_str().unwrap().to_string();
 
-        files.insert(file_name, Some(file_path));
-        files_names.push(entry.path());
+        idx.files.insert(file_name, Some(file_path));
+
+        add_document_to_corpus(idx.tf_idf.clone(), &entry.path());
         // TODO
     }
     Ok(())
@@ -136,7 +130,10 @@ type TokenFrequency = HashMap<String, f32>;
 
 type InverseDocumentFrequency = HashMap<String, f32>;
 
-fn create_token_to_document_map(mut map: TfIdfMap, documents: &Vec<PathBuf>) -> HashMap<String, Vec<(PathBuf, f32)>> {
+fn create_token_to_document_map(
+    mut map: TfIdfMap,
+    documents: &Vec<PathBuf>,
+) -> HashMap<String, Vec<(PathBuf, f32)>> {
     let mut token_to_document = HashMap::new();
 
     let doc_to_tf_idf = documents_to_tf_idf(documents);
@@ -156,13 +153,10 @@ fn create_token_to_document_map(mut map: TfIdfMap, documents: &Vec<PathBuf>) -> 
                 list
             };
 
-            // let doc_vec = token_to_document.entry(token).or_insert(vec![]);
-
             if tf_idf > 0. {
                 let allocated_path = map.alloc_string(path.to_str().unwrap().to_string());
 
                 map.push_to_list(&mut doc_list, (tf_idf, allocated_path));
-                // doc_vec.push((path.clone(), tf_idf));
             }
 
             // doc_vec.sort_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap());
@@ -189,7 +183,7 @@ fn documents_to_tf_idf(documents: &Vec<PathBuf>) -> HashMap<PathBuf, TfIdf> {
 
     let tf = documents
         .iter()
-        .map(|(_, tokens)| term_frequency(tokens.clone()))
+        .map(|(_, tokens)| term_frequency(&tokens))
         .collect::<Vec<TokenFrequency>>();
 
     let idf = inverse_document_frequency(&tf);
@@ -211,6 +205,58 @@ fn documents_to_tf_idf(documents: &Vec<PathBuf>) -> HashMap<PathBuf, TfIdf> {
     tf_idf
 }
 
+fn add_document_to_corpus(mut map: TfIdfMap, document: &PathBuf) -> Option<()> {
+    let ext = document
+        .extension()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+
+    if ext != "pdf" && ext != "docx" && ext != "txt" && ext != "md" && ext != "html" && ext != "htm"
+    {
+        return None;
+    }
+
+    let tokens = tokenize_file(document)?;
+
+    let document_path = map.alloc_string(document.to_str().unwrap().to_string());
+
+    for (term, frequency) in term_frequency(&tokens) {
+        let term_allocated = map.alloc_string(term.clone());
+
+        let mut list = map.get(&term).unwrap_or_else(|| {
+            let list = map.new_list();
+            map.insert(term_allocated, list.clone());
+            list
+        });
+
+        map.push_to_list(&mut list, (frequency, document_path.clone()));
+
+        remove_lowest_tf_idf_for_token(20, map.clone(), &term);
+    }
+
+    Some(())
+}
+
+fn remove_lowest_tf_idf_for_token(corpus_size: usize, mut map: TfIdfMap, token: &String) {
+    let mut tf_idf = _tf_idf(corpus_size, map.clone(), token);
+
+    if tf_idf.len() < 15 {
+        return;
+    }
+
+    if tf_idf.len() == 0 {
+        return;
+    }
+
+    tf_idf.sort_by(|(a, _), (b, _)| a.partial_cmp(b).unwrap());
+
+    let mut list = map.get(token).unwrap();
+
+    let lowest = &tf_idf[0];
+
+    map.remove_from_list(&mut list, &lowest.1);
+}
+
 fn inverse_document_frequency(documents: &Vec<TokenFrequency>) -> InverseDocumentFrequency {
     let mut d = HashMap::new();
 
@@ -229,11 +275,15 @@ fn inverse_document_frequency(documents: &Vec<TokenFrequency>) -> InverseDocumen
         .collect()
 }
 
-fn term_frequency(tokens: Vec<String>) -> TokenFrequency {
+fn term_frequency(tokens: &Vec<String>) -> TokenFrequency {
     let mut t = HashMap::new();
 
     for token in tokens {
-        let count = t.entry(token).or_insert(0.0);
+        if !is_suitable_token(token) {
+            continue;
+        }
+
+        let count = t.entry(token.clone()).or_insert(0.0);
         *count += 1.0;
     }
 
@@ -252,7 +302,24 @@ fn term_frequency(tokens: Vec<String>) -> TokenFrequency {
     //     *count /= t_prime;
     // }
 
-    t
+    if t.len() > 15 {
+        let mut t = t.into_iter().collect::<Vec<(String, f32)>>();
+        t.sort_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap());
+
+        t.remove(t.len() - 1);
+        t.remove(t.len() - 1);
+        t.remove(t.len() - 1);
+        t.remove(t.len() - 1);
+        t.remove(t.len() - 1);
+
+        t.into_iter().collect()
+    } else {
+        t
+    }
+}
+
+fn is_suitable_token(token: &String) -> bool {
+    token.len() > 3 && token.len() < 32 && !token.chars().all(|c| c.is_numeric())
 }
 
 fn load_as_pdf(path: &PathBuf) -> Option<String> {
@@ -265,7 +332,7 @@ fn load_as_pdf(path: &PathBuf) -> Option<String> {
         return None;
     }
 
-    const MAX_PAGES: u32 = 50;
+    const MAX_PAGES: u32 = 70;
     if pages > MAX_PAGES {
         pages = MAX_PAGES;
     }

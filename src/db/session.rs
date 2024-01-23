@@ -60,6 +60,7 @@ impl DBSession {
     }
 
     pub fn reset(path: PathBuf) {
+        println!("resetting db at {:?}", path);
         remove_if_exists(&path);
         remove_if_exists(&meta_path(&path));
     }

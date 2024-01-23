@@ -66,8 +66,8 @@ where
     }
 
     pub fn save_meta(&mut self) {
-        // let mut db = self.db.lock().unwrap();
-        // db.meta.save();
+        let mut db = self.db.lock().unwrap();
+        db.meta.save();
     }
 
     pub fn reset(path: PathBuf) {
@@ -89,6 +89,11 @@ where
     pub fn push_to_list<T: Clone>(&mut self, list: &mut DBList<T>, value: T) {
         let mut db = self.db.lock().unwrap();
         list.push(&mut db, value);
+    }
+
+    pub fn remove_from_list<T: Clone + CompareWith<T>, U: Clone>(&mut self, list: &mut DBList<(U, T)>, value: &T) {
+        let mut db = self.db.lock().unwrap();
+        list.remove(&mut db, |v, db| v.1.compare_with(value, db));
     }
 
     pub fn get_string(&mut self, string: &DBString) -> String {

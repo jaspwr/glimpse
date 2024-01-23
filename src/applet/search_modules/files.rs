@@ -3,17 +3,17 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use async_trait::async_trait;
 use glimpse::{
     config::CONF,
-    file_index::{tokenize_string, FileIndex},
+    file_index::{tokenize_string, FileIndex, _tf_idf},
     prelude::*,
 };
 
 use crate::{
+    app::BoxedRuntime,
     exec::{execute_detached, xdg_open},
     icon,
     result_templates::standard_entry,
     search::string_search,
     utils::{benchmark, simple_hash_nonce, HashFn},
-    app::BoxedRuntime,
 };
 
 use super::{SearchModule, SearchResult};
@@ -53,12 +53,16 @@ impl SearchModule for Files {
             //     .map(|(s, r)| self.create_result(&s, r, FileType::Dir, hash_fn(&*s)))
             //     .collect::<Vec<SearchResult>>();
 
-            let mut files = index.files.get(&query, &hash_fn)
+            let mut files = index
+                .files
+                .get(&query, &hash_fn)
                 .into_iter()
                 .map(|(s, r)| self.create_result(&s, r, FileType::File, hash_fn(&*s)))
                 .collect::<Vec<SearchResult>>();
 
-            let mut dirs = index.dirs.get(&query, &hash_fn)
+            let mut dirs = index
+                .dirs
+                .get(&query, &hash_fn)
                 .into_iter()
                 .map(|(s, r)| self.create_result(&s, r, FileType::Dir, hash_fn(&*s)))
                 .collect::<Vec<SearchResult>>();
@@ -66,20 +70,24 @@ impl SearchModule for Files {
             let mut tokens = tokenize_string(&query);
             tokens.dedup();
 
+            // TODO: Compound relevance
+            //       Fuzzy
+            //       tokenize title searching (spaces, dashes, underscores, pascalcase)
+
             let mut file_contents_matches = tokens
                 .into_iter()
                 .map(|token| {
-                    if let Some(list) = index.tf_idf.get(token) {
-                        index.tf_idf.get_list(&list)
-                            .iter()
-                            .filter_map(|(r, s)| {
-                                let s = index.tf_idf.get_string(&s);
-                                Some(self.handle_tf_idf_result(&PathBuf::from(s.clone()), &r, hash_fn(s.as_str())))
-                            })
-                            .collect::<Vec<SearchResult>>()
-                    } else {
-                        vec![]
-                    }
+                    _tf_idf(10, index.tf_idf.clone(), &token)
+                        .iter()
+                        .filter_map(|(r, s)| {
+                            let s = index.tf_idf.get_string(&s);
+                            Some(self.handle_tf_idf_result(
+                                &PathBuf::from(s.clone()),
+                                &r,
+                                hash_fn(s.as_str()),
+                            ))
+                        })
+                        .collect::<Vec<SearchResult>>()
 
                     // index
                     //     .tf_idf
@@ -248,7 +256,7 @@ fn find_file_icon_name(ext: &str) -> &str {
         "exe" => "application-x-executable",
         "deb" | "rpm" => "package-x-generic",
         "tex" => "text-x-tex",
-        "toml" => "text-x-toml",
+        "jar" => "application-x-java-archive",
         _ => "text-x-generic",
     }
 }

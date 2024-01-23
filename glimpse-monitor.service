@@ -1,8 +1,8 @@
 [Unit]
-Description=glimpse-indexer
+Description=glimpse-monitor
 
 [Service]
-ExecStart=/usr/local/bin/glimpse-indexer
+ExecStart=/usr/local/bin/glimpse-monitor
 Type=oneshot
 RemainAfterExit=yes
 

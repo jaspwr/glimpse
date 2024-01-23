@@ -208,9 +208,30 @@ where
     }
 }
 
+// impl<A, B> CompareWith<A> for &B
+// where
+//     A: CompareWith<B>,
+// {
+//     fn compare_with(&self, other: A, _: &mut DBSession) -> bool {
+//         self == &&other
+//     }
+// }
+
 impl CompareWith<DBString> for String {
     fn compare_with(&self, other: &DBString, db: &mut DBSession) -> bool {
         self == &other.load_string(db)
+    }
+}
+
+impl CompareWith<DBString> for &String {
+    fn compare_with(&self, other: &DBString, db: &mut DBSession) -> bool {
+        *self == &other.load_string(db)
+    }
+}
+
+impl CompareWith<DBString> for DBString {
+    fn compare_with(&self, other: &DBString, db: &mut DBSession) -> bool {
+        self.load_string(db) == other.load_string(db)
     }
 }
 
