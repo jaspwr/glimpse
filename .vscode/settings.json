@@ -1,9 +1,0 @@
-{
-    "cSpell.words": [
-        "Mmap",
-        "trunc"
-    ],
-    "rust-analyzer.linkedProjects": [
-        "./Cargo.toml"
-    ]
-}
