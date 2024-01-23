@@ -60,6 +60,14 @@ impl StringSearchDb {
         results
     }
 
+    pub fn insert_if_new(&mut self, word: &String, points_to: Option<String>) {
+        let mut db = self.db.lock().unwrap();
+        if self.trie.get(&mut db, word).len() == 0 {
+            self.trie
+                .insert(&mut db, word.as_str(), &points_to.unwrap());
+        }
+    }
+
     pub fn save_meta(&mut self) {
         // let mut db = self.db.lock().unwrap();
         // db.meta.save();

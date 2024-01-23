@@ -1,3 +1,4 @@
+use std::borrow::BorrowMut;
 use std::hash::Hash;
 use std::{
     path::PathBuf,
@@ -6,7 +7,7 @@ use std::{
 
 use crate::db::allocator::SaveableDBPointer;
 
-use super::allocator::CopyToDB;
+use super::allocator::{CopyToDB, DBPointer, SerializableDBPointer};
 use super::hashmap::{CompareWith, EqWithDBAccess, HashWithDBAccess};
 use super::list::DBList;
 use super::string::DBString;
@@ -20,6 +21,7 @@ where
 {
     db: Arc<Mutex<DBSession>>,
     map: DBHashMap<K, V>,
+    corpus_size: SerializableDBPointer<usize>,
 }
 
 impl<K_in_db, V> HashMapDB<K_in_db, V>
@@ -30,11 +32,15 @@ where
     pub fn open(path: PathBuf, buckets_count: usize) -> Self {
         let mut db = DBSession::open(path);
 
-        let map = if db.meta.pointer_store.len() == 1 {
-            let ptr = db.meta.pointer_store[0].to_ptr::<DBHashMap<K_in_db, V>>();
-            let borrowed = db.borrow_mut(&ptr);
-            assert!(borrowed.len() == 1);
-            (*borrowed[0]).clone()
+        let (map, corpus_size) = if db.meta.pointer_store.len() == 2 {
+            let map_ptr = db.meta.pointer_store[0].to_ptr::<DBHashMap<K_in_db, V>>();
+            let map_borrowed = db.borrow_mut(&map_ptr);
+            assert!(map_borrowed.len() == 1);
+            let map = (*map_borrowed[0]).clone();
+
+            let corpus_size = db.meta.pointer_store[1].to_ptr::<usize>().to_serializable();
+
+            (map, corpus_size)
         } else {
             assert!(db.meta.pointer_store.len() == 0);
             let map = DBHashMap::<K_in_db, V>::new(&mut db, buckets_count);
@@ -42,13 +48,21 @@ where
             db.meta
                 .pointer_store
                 .push(SaveableDBPointer::from_ptr(map_alloc));
+
+            let corpus_size = db.alloc(vec![0]).to_serializable();
+
+            db.meta
+                .pointer_store
+                .push(SaveableDBPointer::from_ptr(corpus_size.clone().to_ptr()));
+
             db.meta.save();
-            map
+            (map, corpus_size)
         };
 
         Self {
             db: Arc::new(Mutex::new(db)),
             map,
+            corpus_size,
         }
     }
 
@@ -72,6 +86,16 @@ where
 
     pub fn reset(path: PathBuf) {
         DBSession::reset(path);
+    }
+
+    pub fn corpus_size(&mut self) -> usize {
+        let mut db = self.db.lock().unwrap();
+        (*db).borrow_mut(&self.corpus_size.to_ptr())[0].clone()
+    }
+
+    pub fn increment_corpus_size(&mut self) {
+        let mut db = self.db.lock().unwrap();
+        *(*db).borrow_mut(&self.corpus_size.to_ptr())[0] += 1;
     }
 
     pub fn alloc_string(&mut self, string: String) -> DBString {

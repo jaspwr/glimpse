@@ -105,7 +105,7 @@ pub fn meta_path(path: &PathBuf) -> PathBuf {
 
 fn create_file_if_inexistent(path: &PathBuf) -> bool {
     if !path.exists() {
-        let cap = 1024 * 1024 * 109;
+        let cap = 1024 * 64 * 109;
 
         let mut file = OpenOptions::new()
             .write(true)

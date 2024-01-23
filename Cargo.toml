@@ -19,6 +19,7 @@ path = "src/monitor/main.rs"
 # debug = true
 
 [features]
+default = ["app"]
 app = [
     "dep:gtk",
     "dep:gdk",

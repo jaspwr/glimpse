@@ -1,16 +1,19 @@
 use crate::biases::BIASES;
 
 pub fn word_similarity(needle: &String, item: String, id_hash: &Box<dyn Fn(&str) -> u64>) -> f32 {
-    let matched = matched_chars_loose(needle, &item);
+    let needle = needle.to_lowercase();
+    let item = item.to_lowercase();
+
+    let matched = matched_chars_loose(&needle, &item);
 
     let mut similarity = matched as f32 + (matched as f32 / item.len() as f32);
     similarity /= needle.len() as f32;
 
     if item == *needle {
         similarity += 8.0;
-    } else if item.starts_with(needle) {
+    } else if item.starts_with(&needle) {
         similarity += 4.0;
-    } else if item.contains(needle) {
+    } else if item.contains(&needle) {
         similarity += 3.5;
     }
 

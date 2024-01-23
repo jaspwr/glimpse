@@ -27,6 +27,11 @@ enum FileType {
     Dir,
 }
 
+struct FileResult {
+    relevance: f32,
+    kind: FileType,
+}
+
 #[async_trait]
 impl SearchModule for Files {
     async fn search(&self, query: String, max_results: u32) -> Vec<SearchResult> {
@@ -52,61 +57,68 @@ impl SearchModule for Files {
             //     .into_iter()
             //     .map(|(s, r)| self.create_result(&s, r, FileType::Dir, hash_fn(&*s)))
             //     .collect::<Vec<SearchResult>>();
+            let mut files: HashMap<String, FileResult> = HashMap::new();
 
-            let mut files = index
-                .files
-                .get(&query, &hash_fn)
-                .into_iter()
-                .map(|(s, r)| self.create_result(&s, r, FileType::File, hash_fn(&*s)))
-                .collect::<Vec<SearchResult>>();
+            let push =
+                |files: &mut HashMap<String, FileResult>, s: &String, r: f32, kind: FileType| {
+                    let s = s.clone();
 
-            let mut dirs = index
+                    if let Some(res) = files.get_mut(&s) {
+                        res.relevance += r;
+                        return;
+                    }
+
+                    files.insert(s, FileResult { relevance: r, kind });
+                };
+
+            index
                 .dirs
                 .get(&query, &hash_fn)
                 .into_iter()
-                .map(|(s, r)| self.create_result(&s, r, FileType::Dir, hash_fn(&*s)))
-                .collect::<Vec<SearchResult>>();
+                .for_each(|(s, r)| push(&mut files, &s, r, FileType::Dir));
+
+            index
+                .files
+                .get(&query, &hash_fn)
+                .into_iter()
+                .for_each(|(s, r)| push(&mut files, &s, r, FileType::File));
 
             let mut tokens = tokenize_string(&query);
             tokens.dedup();
 
-            // TODO: Compound relevance
-            //       Fuzzy
-            //       tokenize title searching (spaces, dashes, underscores, pascalcase)
+            let corpus_size = index.tf_idf.corpus_size();
 
-            let mut file_contents_matches = tokens
-                .into_iter()
-                .map(|token| {
-                    _tf_idf(10, index.tf_idf.clone(), &token)
+            tokens.into_iter().for_each(|token| {
+                _tf_idf(corpus_size, index.tf_idf.clone(), &token)
+                    .iter()
+                    .for_each(|(r, s)| {
+                        let s = index.tf_idf.get_string(&s);
+                        push(&mut files, &s, *r / 3., FileType::File);
+                    });
+
+                let similar_terms = index.terms.get(&token, &hash_fn);
+
+                for (term, similarity) in similar_terms {
+                    if term == token {
+                        continue;
+                    }
+
+                    _tf_idf(corpus_size, index.tf_idf.clone(), &term)
                         .iter()
-                        .filter_map(|(r, s)| {
+                        .for_each(|(r, s)| {
                             let s = index.tf_idf.get_string(&s);
-                            Some(self.handle_tf_idf_result(
-                                &PathBuf::from(s.clone()),
-                                &r,
-                                hash_fn(s.as_str()),
-                            ))
-                        })
-                        .collect::<Vec<SearchResult>>()
+                            let r = *r * similarity / 8.;
+                            push(&mut files, &s, r, FileType::File);
+                        });
+                }
+            });
 
-                    // index
-                    //     .tf_idf
-                    //      t.get(&token))
-                    //     .iter()
-                    //     .filter_map(|(s, r)| {
-                    //         Some(self.handle_tf_idf_result(s, r, hash_fn(s.to_str()?)))
-                    //     })
-                    //     .collect::<Vec<SearchResult>>()
-                })
-                .flatten()
-                .collect::<Vec<SearchResult>>();
-
-            merge_results(&mut file_contents_matches);
-
-            files.append(&mut dirs);
-
-            files.append(&mut file_contents_matches);
             files
+                .into_iter()
+                .map(|(s, res)| {
+                    self.create_result(&s, clamp_relevance(&res.relevance), res.kind, hash_fn(&*s))
+                })
+                .collect::<Vec<SearchResult>>()
         } else {
             vec![]
         }

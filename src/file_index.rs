@@ -33,7 +33,8 @@ pub struct FileIndex {
     pub files: StringSearchDb,
     pub dirs: StringSearchDb,
     // pub tf_idf: HashMap<String, Vec<(PathBuf, f32)>>,
-    pub tf_idf: TfIdfMap
+    pub tf_idf: TfIdfMap,
+    pub terms: StringSearchDb,
 }
 
 pub fn lock() -> Result<(), Box<dyn std::error::Error>> {
@@ -97,18 +98,29 @@ impl FileIndex {
         PATH.join("tf_idf")
     }
 
+    fn terms_path() -> PathBuf {
+        PATH.join("terms")
+    }
+
     pub fn open() -> Result<FileIndex, Box<dyn std::error::Error>> {
         let files = StringSearchDb::open(Self::files_path());
         let dirs = StringSearchDb::open(Self::dirs_path());
         let tf_idf = HashMapDB::open(Self::tf_idf_path(), 5000);
+        let terms = StringSearchDb::open(Self::terms_path());
 
-        Ok(FileIndex { files, dirs, tf_idf })
+        Ok(FileIndex {
+            files,
+            dirs,
+            tf_idf,
+            terms,
+        })
     }
 
     pub fn reset_all() {
         StringSearchDb::reset(Self::files_path());
         StringSearchDb::reset(Self::dirs_path());
         StringSearchDb::reset(Self::tf_idf_path());
+        StringSearchDb::reset(Self::terms_path());
     }
 }
 
