@@ -4,7 +4,7 @@ A simple GTK3 launcher/finder utility for GNU/Linux. Current features include se
 
 > This project is still in development. Some features may not work as expected and may not be localised. If you have any issues or suggestions, please open an issue.
 
-https://github.com/jaspwr/glimpse/assets/40232406/7a9e1af0-b41a-4c26-a287-81bcb8bd12f8
+https://github.com/jaspwr/glimpse/assets/40232406/9bfcb16e-8e4f-4548-aa89-cc35f886ca17
 
 ## Installation
 There are currently no packages available so you will have to install manually. This may change in the future.
