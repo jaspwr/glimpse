@@ -12,6 +12,7 @@ use crate::db::list::DBList;
 use crate::db::string::DBString;
 use crate::db::string_search_db::StringSearchDb;
 use crate::prelude::*;
+use crate::tfidf::{add_document_to_corpus, TfIdfMap};
 
 pub static PATH: Lazy<PathBuf> = Lazy::new(|| {
     let path = PathBuf::from(CONF.indexing.location.clone());
@@ -26,8 +27,6 @@ pub static PATH: Lazy<PathBuf> = Lazy::new(|| {
 pub static LOCK_PATH: Lazy<PathBuf> = Lazy::new(|| PATH.join("lock"));
 
 pub static LAST_INDEXED_PATH: Lazy<PathBuf> = Lazy::new(|| PATH.join("last_indexed"));
-
-pub type TfIdfMap = HashMapDB<DBString, DBList<(Relevance, DBString)>>;
 
 pub struct FileIndex {
     pub files: StringSearchDb,
@@ -122,6 +121,22 @@ impl FileIndex {
         StringSearchDb::reset(Self::tf_idf_path());
         StringSearchDb::reset(Self::terms_path());
     }
+
+    pub fn add_file(&mut self, path: &PathBuf) {
+        let file_name = path.file_name().unwrap().to_str().unwrap().to_string();
+        let file_path = path.to_str().unwrap().to_string();
+
+        self.files.insert(file_name, Some(file_path));
+
+        add_document_to_corpus(self, path);
+    }
+
+    pub fn add_dir(&mut self, path: &PathBuf) {
+        let folder_name = path.file_name().unwrap().to_str().unwrap().to_string();
+        let dir_name = path.to_str().unwrap().to_string();
+
+        self.dirs.insert(folder_name, Some(dir_name));
+    }
 }
 
 // impl Index {
@@ -163,7 +178,6 @@ pub fn tokenize_string(str: &String) -> Vec<String> {
         );
     }
 
-
     if pre_is_alpha {
         append_word(&word_buf, word_buf_index, &mut tokens);
     }
@@ -203,24 +217,4 @@ fn append_word(word_buf: &[char; 100], word_buf_index: usize, tokens: &mut Vec<S
         .to_lowercase();
 
     tokens.push(token);
-}
-
-pub fn _tf_idf(corpus_size: usize, mut map: TfIdfMap, token: &String) -> Vec<(f32, DBString)> {
-    let appearances = match map.get(token) {
-        Some(list) => map.get_list(&list),
-        None => return vec![],
-    };
-
-    let appears_in = appearances.len() as f32;
-
-    if appears_in == 0.0 {
-        return vec![];
-    }
-
-    let idf = f32::ln(corpus_size as f32 / appears_in);
-
-    appearances
-        .into_iter()
-        .map(|(tf, doc)| (tf * idf, doc))
-        .collect()
 }

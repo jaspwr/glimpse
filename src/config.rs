@@ -140,7 +140,13 @@ pub struct PreviewWindow {
 
 pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
     if let Some(home) = home::home_dir() {
-        let config_path = home.join(".config").join("glimpse").join("config.toml");
+        let mut config_path = home.join(".config").join("glimpse").join("config.toml");
+
+        if home.file_name().unwrap() == "root" {
+            config_path = find_user_config()?;
+        }
+
+        println!("Config path: {:?}", config_path);
 
         if let Ok(file) = std::fs::File::open(config_path.clone()) {
             let file = BufReader::new(file);
@@ -174,6 +180,38 @@ pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
             "Error loading config.",
         )))
     }
+}
+
+fn find_user_config() -> Result<PathBuf, Box<dyn Error>> {
+    let mut config_path = PathBuf::from("/home");
+
+    for entry in fs::read_dir("/home")? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.is_dir() {
+            let path = path.file_name().unwrap().to_str().unwrap();
+
+            if path == "root" {
+                continue;
+            }
+
+            config_path = PathBuf::from("/home")
+                .join(path)
+                .join(".config")
+                .join("glimpse")
+                .join("config.toml");
+
+            if config_path.exists() {
+                return Ok(config_path);
+            }
+        }
+    }
+
+    Err(Box::new(std::io::Error::new(
+        std::io::ErrorKind::NotFound,
+        "Error loading config.",
+    )))
 }
 
 fn create_new_config_file(home: PathBuf, config_path: PathBuf) -> Result<Config, Box<dyn Error>> {

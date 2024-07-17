@@ -3,8 +3,9 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use async_trait::async_trait;
 use glimpse::{
     config::CONF,
-    file_index::{tokenize_string, FileIndex, _tf_idf},
+    file_index::{tokenize_string, FileIndex},
     prelude::*,
+    tfidf::_tf_idf,
 };
 
 use crate::{
@@ -115,9 +116,8 @@ impl SearchModule for Files {
 
             files
                 .into_iter()
-                .map(|(s, res)| {
-                    self.create_result(&s, res.relevance / 2., res.kind, hash_fn(&*s))
-                })
+                .filter(|(s, _)| PathBuf::from(s).exists())
+                .map(|(s, res)| self.create_result(&s, res.relevance / 2., res.kind, hash_fn(&*s)))
                 .collect::<Vec<SearchResult>>()
         } else {
             vec![]

@@ -1,66 +1,100 @@
-use futures::{
-    channel::mpsc::{channel, Receiver},
-    SinkExt, StreamExt,
-};
-use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
-use std::path::Path;
+use fanotify::high_level::*;
+use glimpse::{config::CONF, file_index::FileIndex};
+use nix::poll::{poll, PollFd, PollFlags};
+use std::{os::fd::AsFd, path::PathBuf};
 
-/// Async, futures channel based event watching
 fn main() {
-    let path = std::env::args()
-        .nth(1)
-        .expect("Argument 1 needs to be a path");
-    println!("watching {}", path);
+    if !CONF.modules.files {
+        return;
+    }
 
-    futures::executor::block_on(async {
-        if let Err(e) = async_watch(path).await {
-            println!("error: {:?}", e)
-        }
-    });
+    for path in &CONF.search_paths {
+        start_listener(path.clone());
+    }
 }
 
-fn async_watcher() -> notify::Result<(RecommendedWatcher, Receiver<notify::Result<Event>>)> {
-    let (mut tx, rx) = channel(1);
+fn start_listener(path: PathBuf) {
+    // TODO: Make this run in a separate thread to allow for multiple paths to be monitored.
 
-    // Automatically select the best implementation for your platform.
-    // You can also access each implementation directly e.g. INotifyWatcher.
-    let watcher = RecommendedWatcher::new(
-        move |res| {
-            futures::executor::block_on(async {
-                tx.send(res).await.unwrap();
-            })
-        },
-        Config::default(),
-    )?;
+    let ingore_dirs = &CONF.ignore_directories;
+    let search_hidden = CONF.search_hidden_folders;
 
-    Ok((watcher, rx))
-}
+    let ignore_files = vec![
+        "dirs",
+        "files",
+        "tf_idf",
+        "terms",
+        "dirs.dbmeta1",
+        "files.dbmeta1",
+        "tf_idf.dbmeta1",
+        "terms.dbmeta1",
+    ];
 
-async fn async_watch<P: AsRef<Path>>(path: P) -> notify::Result<()> {
-    let (mut watcher, mut rx) = async_watcher()?;
+    let fd = Fanotify::new_nonblocking(FanotifyMode::CONTENT).unwrap();
+    fd.add_mountpoint(FAN_CLOSE_WRITE, &path).unwrap();
 
-    // Add a path to be watched. All files and directories at that path and
-    // below will be monitored for changes.
-    watcher.watch(path.as_ref(), RecursiveMode::Recursive)?;
+    let fd_handle = fd.as_fd();
+    let mut fds = [PollFd::new(&fd_handle, PollFlags::POLLIN)];
+    loop {
+        let poll_num = poll(&mut fds, -1).unwrap();
+        if poll_num > 0 {
+            for event in fd.read_event() {
+                let path = PathBuf::from(&event.path);
 
-    while let Some(res) = rx.next().await {
-        match res {
-            Ok(event) => {
-                match event.kind {
-                    notify::EventKind::Create(_) => {
-                        println!("created: {:?}", event.paths);
-                    }
-                    notify::EventKind::Modify(_) => {
-                        println!("modified: {:?}", event.paths);
-                    }
-                    notify::EventKind::Remove(_) => {
-                        println!("removed: {:?}", event.paths);
-                    }
-                    _ => {}
+                let segments = if path.is_dir() {
+                    path.iter()
+                } else {
+                    path.parent().unwrap().iter()
+                };
+
+                let mut handles = true;
+
+                if path.is_file()
+                    && ignore_files.contains(&path.file_name().unwrap().to_str().unwrap())
+                {
+                    handles = false;
                 }
-            },
-            Err(e) => println!("watch error: {:?}", e),
+
+                for segment in segments {
+                    let segment = segment.to_str().unwrap();
+
+                    if ingore_dirs.contains(&segment.to_string()) {
+                        handles = false;
+                        break;
+                    }
+
+                    if !search_hidden && segment.starts_with(".") {
+                        handles = false;
+                        break;
+                    }
+                }
+
+                if handles {
+                    let _ = handle_file(path);
+                }
+
+                fd.send_response(event.fd, FanotifyResponse::Allow);
+            }
+        } else {
+            eprintln!("poll_num <= 0!");
+            break;
         }
+    }
+}
+
+fn handle_file(path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+    if !path.exists() {
+        return Ok(());
+    }
+
+    println!("File: {:?}", path);
+
+    let mut idx = FileIndex::open()?;
+
+    if path.is_dir() {
+        idx.add_dir(&path);
+    } else {
+        idx.add_file(&path);
     }
 
     Ok(())
