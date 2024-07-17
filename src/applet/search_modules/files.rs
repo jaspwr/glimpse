@@ -93,7 +93,7 @@ impl SearchModule for Files {
                     .iter()
                     .for_each(|(r, s)| {
                         let s = index.tf_idf.get_string(&s);
-                        push(&mut files, &s, *r / 10., FileType::File);
+                        push(&mut files, &s, *r / 17., FileType::File);
                     });
 
                 let similar_terms = index.terms.get(&token, &hash_fn);
@@ -116,7 +116,7 @@ impl SearchModule for Files {
             files
                 .into_iter()
                 .map(|(s, res)| {
-                    self.create_result(&s, res.relevance / 5., res.kind, hash_fn(&*s))
+                    self.create_result(&s, res.relevance / 2., res.kind, hash_fn(&*s))
                 })
                 .collect::<Vec<SearchResult>>()
         } else {

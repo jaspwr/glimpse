@@ -11,7 +11,7 @@ use gtk::prelude::*;
 static CONTROL: AtomicBool = AtomicBool::new(false);
 
 use glimpse::{
-    config::{CONF, CONF_FILE_PATH, CSS}, db::string_search_db::{StringSearchDb}, biases::increment_bias,
+    biases::increment_bias, config::{CONF, CONF_FILE_PATH, CSS}, db::string_search_db::{StringSearchDb}, file_index
 };
 use preview_window::{PreviewWindowShowing, SafeBox};
 use search_modules::{SearchModule, SearchResult};
@@ -135,6 +135,15 @@ pub fn run_app() {
                 CONF_FILE_PATH.to_str().unwrap());
 
             create_err_msg(error_title, err, &container);
+        }
+
+        if CONF.modules.files && file_index::is_locked() {
+            println!("locked");
+            let box_ = gtk::Box::new(gtk::Orientation::Vertical, 0);
+            let label = gtk::Label::new(Some("ⓘ Files are currently being indexed.\nPlease wait before searching for files."));
+            box_.set_child(Some(&label));
+            container.add(&box_);
+            box_.show_all();
         }
 
         let misc_style_provider = gtk::CssProvider::new();

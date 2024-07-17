@@ -2,4 +2,6 @@
 *.o
 *.hi
 *.h
+*.db
+*.dbmeta1
 .vscode

@@ -163,6 +163,7 @@ pub fn tokenize_string(str: &String) -> Vec<String> {
         );
     }
 
+
     if pre_is_alpha {
         append_word(&word_buf, word_buf_index, &mut tokens);
     }

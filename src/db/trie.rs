@@ -33,7 +33,7 @@ impl DBTrie {
     pub fn insert(&mut self, db: &mut DBSession, word: &str, points_to: &str) {
         let word = word.to_lowercase();
 
-        println!("inserting {:?} -> {:?}", word, points_to);
+        // println!("inserting {:?} -> {:?}", word, points_to);
         let ptr = self.root.to_ptr();
         let mut borrow = db.borrow_mut(&ptr);
         assert!(borrow.len() == 1);

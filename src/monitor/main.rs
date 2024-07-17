@@ -45,7 +45,20 @@ async fn async_watch<P: AsRef<Path>>(path: P) -> notify::Result<()> {
 
     while let Some(res) = rx.next().await {
         match res {
-            Ok(event) => println!("changed: {:?}", event),
+            Ok(event) => {
+                match event.kind {
+                    notify::EventKind::Create(_) => {
+                        println!("created: {:?}", event.paths);
+                    }
+                    notify::EventKind::Modify(_) => {
+                        println!("modified: {:?}", event.paths);
+                    }
+                    notify::EventKind::Remove(_) => {
+                        println!("removed: {:?}", event.paths);
+                    }
+                    _ => {}
+                }
+            },
             Err(e) => println!("watch error: {:?}", e),
         }
     }

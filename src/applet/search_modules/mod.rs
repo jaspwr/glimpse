@@ -61,10 +61,8 @@ pub fn load_standard_modules(rt: BoxedRuntime) -> Vec<BoxedSearchModule> {
         ret.push(Box::new(web_bookmarks::WebBookmarks::new(rt.clone())));
     }
 
-    if CONF.use_online_modules {
-        if CONF.modules.dictionary {
-            ret.push(Box::new(dictionary::Dictionary::new()));
-        }
+    if CONF.modules.dictionary {
+        ret.push(Box::new(dictionary::Dictionary::new()));
     }
 
     if CONF.modules.steam_games && steam_games::steam_folder_exists() {

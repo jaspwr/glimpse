@@ -206,10 +206,10 @@ impl DBSession {
         self.meta.max_allocated = Address(start.offset(length).0 + 1);
 
         let end = start.offset(length);
-        let needed_length = BytesLength(end.0 + 1024);
+        let needed_length = BytesLength(end.0);
 
-        if self.capacity < needed_length {
-            self.resize(BytesLength(end.0 + 1024 * 1024 * 100));
+        if self.capacity <= needed_length {
+            self.resize(BytesLength(end.0 + 1024 * 1024));
         }
 
         assert!(BytesLength(end.0) < self.capacity);

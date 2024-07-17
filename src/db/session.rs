@@ -48,7 +48,6 @@ impl DBSession {
 
         let capacity = BytesLength(mmap.len());
 
-
         let session = Self {
             mmap: Some(mmap),
             meta,
@@ -73,7 +72,7 @@ impl DBSession {
         const SECTION_SIZE: usize = 1024;
         let new_capacity = (new_capacity.0 / SECTION_SIZE + 1) * SECTION_SIZE + 2048;
 
-        println!("resized to {} KiB", new_capacity / 1024);
+        println!("resized to {} MiB", new_capacity / (1024 * 1024));
 
         let mut file = OpenOptions::new()
             .write(true)
