@@ -1,14 +1,12 @@
 [Unit]
-Description=glimpse-monitor
+Description=File change monitor for Glimpse
+After=network.target
 
 [Service]
 ExecStart=/usr/local/bin/glimpse-monitor
-Type=oneshot
-RemainAfterExit=yes
-
-[Timer]
-OnCalendar=daily
-AccuracySec=1h
+Restart=always
+User=root
+Group=root
 
 [Install]
 WantedBy=multi-user.target

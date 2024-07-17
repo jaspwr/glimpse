@@ -142,7 +142,7 @@ pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
     if let Some(home) = home::home_dir() {
         let mut config_path = home.join(".config").join("glimpse").join("config.toml");
 
-        if home.file_name().unwrap() == "root" {
+        if home.file_name().is_none() || home.file_name().unwrap() == "root" {
             config_path = find_user_config()?;
         }
 

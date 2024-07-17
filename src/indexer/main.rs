@@ -15,6 +15,18 @@ use glimpse::{
 };
 
 fn main() {
+    let args: Vec<String> = std::env::args().collect();
+
+    if args.contains(&String::from("--init")) {
+        if CONF.error.is_some() {
+            eprintln!("Failed to initialize config");
+            std::process::exit(1);
+        }
+
+        return;
+    }
+
+
     if CONF.modules.files {
         if file_index::is_locked() {
             println!("Lock file exists, skipping indexing.");

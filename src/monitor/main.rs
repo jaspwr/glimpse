@@ -4,8 +4,14 @@ use nix::poll::{poll, PollFd, PollFlags};
 use std::{os::fd::AsFd, path::PathBuf};
 
 fn main() {
+    if CONF.error.is_some() {
+        eprintln!("Failed to load config");
+        std::process::exit(1);
+    }
+
     if !CONF.modules.files {
-        return;
+        eprintln!("Files module is disabled in config");
+        std::process::exit(1);
     }
 
     for path in &CONF.search_paths {

@@ -76,43 +76,45 @@ impl SearchModule for Files {
                 .dirs
                 .get(&query, &hash_fn)
                 .into_iter()
-                .for_each(|(s, r)| push(&mut files, &s, r, FileType::Dir));
+                .for_each(|(s, r)| push(&mut files, &s, r * 1.5, FileType::Dir));
 
             index
                 .files
                 .get(&query, &hash_fn)
                 .into_iter()
-                .for_each(|(s, r)| push(&mut files, &s, r, FileType::File));
+                .for_each(|(s, r)| push(&mut files, &s, r * 1.4, FileType::File));
 
-            let mut tokens = tokenize_string(&query);
-            tokens.dedup();
+            if CONF.search_file_contents {
+                let mut tokens = tokenize_string(&query);
+                tokens.dedup();
 
-            let corpus_size = index.tf_idf.corpus_size();
+                let corpus_size = index.tf_idf.corpus_size();
 
-            tokens.into_iter().for_each(|token| {
-                _tf_idf(corpus_size, index.tf_idf.clone(), &token)
-                    .iter()
-                    .for_each(|(r, s)| {
-                        let s = index.tf_idf.get_string(&s);
-                        push(&mut files, &s, *r / 17., FileType::File);
-                    });
-
-                let similar_terms = index.terms.get(&token, &hash_fn);
-
-                for (term, similarity) in similar_terms {
-                    if term == token {
-                        continue;
-                    }
-
-                    _tf_idf(corpus_size, index.tf_idf.clone(), &term)
+                tokens.into_iter().for_each(|token| {
+                    _tf_idf(corpus_size, index.tf_idf.clone(), &token)
                         .iter()
                         .for_each(|(r, s)| {
                             let s = index.tf_idf.get_string(&s);
-                            let r = *r * similarity / 20.;
-                            push(&mut files, &s, r, FileType::File);
+                            push(&mut files, &s, (*r / 17.).clamp(0., 2.), FileType::File);
                         });
-                }
-            });
+
+                    let similar_terms = index.terms.get(&token, &hash_fn);
+
+                    for (term, similarity) in similar_terms {
+                        if term == token {
+                            continue;
+                        }
+
+                        _tf_idf(corpus_size, index.tf_idf.clone(), &term)
+                            .iter()
+                            .for_each(|(r, s)| {
+                                let s = index.tf_idf.get_string(&s);
+                                let r = ((*r * similarity) / 20.).clamp(0., 2.);
+                                push(&mut files, &s, r, FileType::File);
+                            });
+                    }
+                });
+            }
 
             files
                 .into_iter()

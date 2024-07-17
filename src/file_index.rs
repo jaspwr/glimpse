@@ -128,7 +128,9 @@ impl FileIndex {
 
         self.files.insert(file_name, Some(file_path));
 
-        add_document_to_corpus(self, path);
+        if CONF.search_file_contents {
+            add_document_to_corpus(self, path);
+        }
     }
 
     pub fn add_dir(&mut self, path: &PathBuf) {
