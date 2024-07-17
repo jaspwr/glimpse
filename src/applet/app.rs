@@ -564,12 +564,11 @@ fn global_keypress_handler(key: gdk::keys::Key) {
         std::process::exit(0);
     }
 
-    if CONF.preview_window.enabled
-        && !CONF.preview_window.show_automatically
-        && key == to_gdk_key(&CONF.preview_window.show_on_key)
-    {
-        println!("aaaa");
-    }
+    // if CONF.preview_window.enabled
+    //     && !CONF.preview_window.show_automatically
+    //     && key == to_gdk_key(&CONF.preview_window.show_on_key)
+    // {
+    // }
 }
 
 fn to_gdk_key(str_name: &String) -> gdk::keys::Key {
@@ -657,7 +656,7 @@ unsafe impl Sync for SafeListBox {}
 
 pub async fn append_results(results: Vec<SearchResult>, list: Arc<std::sync::Mutex<SafeListBox>>) {
     let mut results = results;
-    results.sort_by(|a, b| a.relevance.partial_cmp(&b.relevance).unwrap());
+    // results.sort_by(|a, b| a.relevance.partial_cmp(&b.relevance).unwrap());
 
     idle_add_once(move || {
         let list = list.lock().unwrap();
@@ -736,15 +735,13 @@ fn find_slot(relevance: f32, id: u64, list: &SafeListBox) -> Option<i32> {
 
     let len = children.len();
 
-    let mut index = 0;
-    #[allow(clippy::explicit_counter_loop)]
-    for child in children {
+    for (index, child) in children.into_iter().enumerate() {
         let child_relevance = get_entry_relevance(child);
         if child_relevance < relevance {
-            return Some(index);
+            return Some(index as i32);
         }
-        index += 1;
     }
+
     Some(len as i32)
 }
 
