@@ -2,6 +2,7 @@
 name = "glimpse"
 version = "0.1.0"
 edition = "2021"
+default-run = "glimpse"
 
 [[bin]]
 name = "glimpse"

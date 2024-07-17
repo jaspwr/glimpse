@@ -275,6 +275,7 @@ impl DBSession {
             .map(|i| {
                 let mmap = self.mmap.as_mut().unwrap();
                 let ptr = &mmap[position.0 + i * item_length] as *const u8;
+                #[allow(invalid_reference_casting)]
                 unsafe { &mut *(ptr as *mut T) }
             })
             .collect()
