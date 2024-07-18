@@ -129,4 +129,10 @@ where
         let mut db = self.db.lock().unwrap();
         list.iter(&mut db).collect()
     }
+
+    /// Database size in bytes
+    pub fn size(&self) -> usize {
+        let db = self.db.lock().unwrap();
+        db.capacity.0
+    }
 }

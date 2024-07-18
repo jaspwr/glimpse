@@ -77,6 +77,12 @@ impl StringSearchDb {
         // db.meta.save();
     }
 
+    /// Database size in bytes
+    pub fn size(&self) -> usize {
+        let db = self.db.lock().unwrap();
+        db.capacity.0
+    }
+
     pub fn reset(path: PathBuf) {
         DBSession::reset(path);
     }

@@ -71,6 +71,11 @@ fn index_dir(
     idx: &mut FileIndex,
     ignore_dirs: &Vec<String>,
 ) -> Result<(), std::io::Error> {
+    if idx.exceeded_capcaity() {
+        println!("Exceeded capacity");
+        return Ok(());
+    }
+
     if ignore_dirs.contains(&path.file_name().unwrap().to_str().unwrap().to_string()) {
         return Ok(());
     }
@@ -92,6 +97,11 @@ fn handle_dir_entry(
     idx: &mut FileIndex,
     ignore_dirs: &Vec<String>,
 ) -> Result<(), std::io::Error> {
+    if idx.exceeded_capcaity() {
+        println!("Exceeded capacity");
+        return Ok(());
+    }
+
     let entry = entry?;
 
     if entry.file_type()?.is_dir() {

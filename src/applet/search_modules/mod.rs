@@ -1,4 +1,4 @@
-use crate::{exec::execute_detached, preview_window::PreviewWindowShowing, app::BoxedRuntime};
+use crate::{app::BoxedRuntime, exec::execute_detached, preview_window::PreviewWindowShowing};
 use async_trait::async_trait;
 use glimpse::{config::CONF, file_index};
 
@@ -42,7 +42,7 @@ pub fn load_standard_modules(rt: BoxedRuntime) -> Vec<BoxedSearchModule> {
 
     if CONF.modules.files {
         if !file_index::is_locked() {
-            if hasnt_indexed_for_days(2) {
+            if hasnt_indexed_for_days(CONF.indexing.full_reindex_after_days) {
                 println!("reindexing files");
                 let _ = execute_detached("glimpse-indexer".to_string());
             } else {
@@ -72,9 +72,9 @@ pub fn load_standard_modules(rt: BoxedRuntime) -> Vec<BoxedSearchModule> {
     ret
 }
 
-fn hasnt_indexed_for_days(days: i64) -> bool {
+fn hasnt_indexed_for_days(days: f32) -> bool {
     let now = chrono::Utc::now().timestamp();
-    const HOUR: i64 = 60 * 60;
-    const DAY: i64 = HOUR * 24;
-    now - file_index::last_indexed().unwrap_or(0) > DAY * days
+    const HOUR: f32 = 60. * 60.;
+    const DAY: f32 = HOUR * 24.;
+    now - file_index::last_indexed().unwrap_or(0) > (DAY * days) as i64
 }

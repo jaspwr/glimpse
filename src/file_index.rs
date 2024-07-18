@@ -122,7 +122,21 @@ impl FileIndex {
         StringSearchDb::reset(Self::terms_path());
     }
 
+    /// Full size of all databases in bytes
+    fn db_size(&self) -> usize {
+        self.files.size() + self.dirs.size() + self.tf_idf.size() + self.terms.size()
+    }
+
+    pub fn exceeded_capcaity(&self) -> bool {
+        const GiB: usize = 1024 * 1024 * 1024;
+        self.db_size() > (CONF.indexing.size_upper_bound_GiB * GiB as f32) as usize
+    }
+
     pub fn add_file(&mut self, path: &PathBuf) {
+        if self.exceeded_capcaity() {
+            return;
+        }
+
         let file_name = path.file_name().unwrap().to_str().unwrap().to_string();
         let file_path = path.to_str().unwrap().to_string();
 
@@ -134,6 +148,10 @@ impl FileIndex {
     }
 
     pub fn add_dir(&mut self, path: &PathBuf) {
+        if self.exceeded_capcaity() {
+            return;
+        }
+
         let folder_name = path.file_name().unwrap().to_str().unwrap().to_string();
         let dir_name = path.to_str().unwrap().to_string();
 

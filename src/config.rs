@@ -128,12 +128,12 @@ pub struct Visual {
 pub struct Indexing {
     pub location: String,
     pub size_upper_bound_GiB: f32,
+    pub full_reindex_after_days: f32,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct PreviewWindow {
     pub enabled: bool,
-    pub show_automatically: bool,
     pub width: u32,
     pub image_size: u32,
 }
@@ -216,8 +216,10 @@ fn find_user_config() -> Result<PathBuf, Box<dyn Error>> {
 
 fn create_new_config_file(home: PathBuf, config_path: PathBuf) -> Result<Config, Box<dyn Error>> {
     let mut default_config = Config::default();
+
     let indexing_location = home.join(".cache").join("glimpse");
     let indexing_location = indexing_location.to_str();
+
     default_config.indexing.location = match indexing_location {
         Some(location) => String::from(location),
         None => {
@@ -227,11 +229,72 @@ fn create_new_config_file(home: PathBuf, config_path: PathBuf) -> Result<Config,
             )))
         }
     };
+
     let toml = toml::to_string(&default_config)?;
+    let toml = add_comment_to("search_paths", "Directory to search for files from", toml);
+    let toml = add_comment_to("location", "Where to store the file database.", toml);
+    let toml = add_comment_to("size_upper_bound_GiB", "The maximum size of the file index database in GiB. If this is exceeded, new data will not be added until there has been a full reindex.", toml);
+    let toml = add_comment_to("search_file_contents", "Index and search files by keywords they contain. Works for pdf, docx, txt and a few other plaintext filetypes. Will take considerably longer to index. It is recommended that full reindexes are done infrequently with this option.", toml);
+    let toml = add_comment_to(
+        "run_exes_with_wine",
+        "Open files with a .exe extension with wine.",
+        toml,
+    );
+    let toml = add_comment_to(
+        "ignore_directories",
+        "Directories to ignore when indexing and searching files.",
+        toml,
+    );
+    let toml = add_comment_to(
+        "full_reindex_after_days",
+        "Recrawl and reindex the file system after this many days",
+        toml,
+    );
+
     let config_folder = home.join(".config").join("glimpse");
     std::fs::create_dir_all(config_folder)?;
     std::fs::write(config_path, toml)?;
     Ok(default_config)
+}
+
+#[inline]
+fn add_comment_to(item: &str, comment: &str, toml: String) -> String {
+    let mut output = String::new();
+
+    for line in toml.lines() {
+        if line.starts_with(item) {
+            let comment = split_comment_over_lines(comment)
+                .into_iter()
+                .map(|line| format!("# {}\n", line))
+                .collect::<String>();
+
+            output.push_str(&format!("\n{}", &comment));
+        }
+
+        output.push_str(&format!("{}\n", line));
+    }
+
+    output
+}
+
+fn split_comment_over_lines(comment: &str) -> Vec<String> {
+    let mut lines = vec![vec![]];
+
+    let mut line_length = 0;
+
+    const ROW_SIZE: usize = 60;
+
+    for word in comment.split_whitespace() {
+        if line_length + word.len() > ROW_SIZE {
+            lines.push(vec![]);
+            line_length = 0;
+        }
+
+        lines.last_mut().unwrap().push(word.to_string());
+        line_length += word.len();
+    }
+
+    lines.into_iter().map(|line| line.join(" ")).collect()
 }
 
 impl Default for Config {
@@ -253,7 +316,8 @@ impl Default for Config {
             max_results: 25,
             indexing: Indexing {
                 location: String::from(""),
-                size_upper_bound_GiB: 0.5,
+                size_upper_bound_GiB: 5.0,
+                full_reindex_after_days: 2.0,
             },
             modules: Modules {
                 commands: true,
@@ -265,7 +329,7 @@ impl Default for Config {
             },
             search_paths: vec![home::home_dir().unwrap_or(PathBuf::from("/home"))],
             search_hidden_folders: false,
-            search_file_contents: true,
+            search_file_contents: false,
             ignore_directories: ignore_dirs,
             visual: Visual {
                 show_icons: true,
