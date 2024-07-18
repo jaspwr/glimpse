@@ -23,17 +23,13 @@ unsafe impl Send for PreviewWindow {}
 pub enum PreviewWindowShowing {
     None,
     File(PathBuf),
-    Text(String),
-    Error(String),
 }
 
 #[derive(Debug, Clone)]
 pub enum PreviewWindowContents {
-    None,
     Image(PathBuf),
     TextFile(String, PathBuf),
     Directory(PathBuf),
-    Error(String),
 }
 
 impl PreviewWindow {
@@ -54,9 +50,6 @@ impl PreviewWindow {
                 } else {
                     self.hide();
                 }
-            }
-            _ => {
-                todo!()
             }
         }
     }
@@ -89,11 +82,9 @@ fn create_file_preview_widget(
     let prev = prev.clone();
 
     container.container.add(&match prev {
-        PreviewWindowContents::None => unreachable!(),
         PreviewWindowContents::Image(path) => load_image(&path)?,
         PreviewWindowContents::TextFile(text, _) => plain_text_preview(text),
         PreviewWindowContents::Directory(path) => dir_listing(&path),
-        PreviewWindowContents::Error(text) => plain_text_preview(text),
     });
 
     let label = gtk::Label::new(Some(path.to_str().unwrap()));
@@ -238,25 +229,3 @@ pub struct SafeBox {
 unsafe impl Sync for SafeBox {}
 unsafe impl Send for SafeBox {}
 
-// fn render_first_page(pdf_path: PathBuf) -> Option<DrawingArea> {
-//     let drawing_area = DrawingArea::new();
-
-//     if let Ok(doc) = PopplerDocument::new_from_file(&pdf_path, "") {
-//         if let Some(page) = doc.get_page(0) {
-//             let (pdf_width, pdf_height) = page.get_size();
-//             let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, pdf_width as i32, pdf_height as i32).ok()?;
-//             let cr = Context::new(&surface).ok()?;
-
-//             cr.set_source_rgb(1.0, 1.0, 1.0);
-//             cr.paint();
-
-//             drawing_area.connect_draw(move |_, context| {
-//                 context.set_source_surface(&surface, 0.0, 0.0);
-//                 context.paint();
-//                 Inhibit(false)
-//             });
-//         }
-//     }
-
-//     Some(drawing_area)
-// }

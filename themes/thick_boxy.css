@@ -1,0 +1,48 @@
+* {
+    font-size: 20px;
+    font-weight: bold;
+    animation: none;
+    background-color: transparent;
+}
+
+.search-field {
+    padding: 32px;
+    border: none;
+}
+
+.outer-container {
+    border-radius: 10px;
+}
+
+.results-list {
+    border-radius: 10px;
+}
+
+.result-box {
+    padding: 24px;
+    transition: all 0s;
+}
+
+.result-title {}
+
+.result-subtext {}
+
+.odd-row {
+}
+
+.result-box:selected {
+    background-color: transparent;
+    font-style: italic;
+    border: none;
+}
+
+scrollbar {
+    background-color: rgba(255, 255, 255, 0.2);
+    border: none;
+}
+
+scrollbar slider {
+    border-radius: 0px;
+    background-color: #fff;
+    border: none;
+}

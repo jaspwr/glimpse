@@ -1,0 +1,53 @@
+* {
+    font-family: 'tamzen';
+    font-size: 16px;
+    animation: none;
+}
+
+.search-field {
+    padding: 15px;
+    background-color: #363a4f;
+    border: none;
+    color: #cad3f5;
+}
+
+.outer-container {
+    border: 8px solid #1e2030;
+    background-color: #363a4f;
+}
+
+.results-list {
+    border-radius: 10px;
+    color: #cad3f5;
+}
+
+.result-box {
+    background-color: #363a4f;
+    padding: 2px;
+    transition: none;
+    color: #cad3f5;
+}
+
+.result-title {}
+
+.result-subtext {}
+
+.odd-row {
+    background-color: #363a4f;
+}
+
+.result-box:selected {
+    color: #8aadf4;
+    background-color: #8aadf4;
+}
+
+scrollbar {
+    background-color: rgba(255, 255, 255, 0.2);
+    border: none;
+}
+
+scrollbar slider {
+    border-radius: 0px;
+    background-color: #fff;
+    border: none;
+}
