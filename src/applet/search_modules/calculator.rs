@@ -429,7 +429,7 @@ fn unary_minus(ts: Tokens) -> PartialExpr {
     match try_consume(&ts, operator) {
         Some(ts) => {
             let (ts, n) = literal(ts)?;
-            Some((ts, Value::wrap(-n.unwrap()))) // literal can never return epsilon
+            Some((ts, Value::wrap(-n.unwrap())))
         }
         None => literal(ts),
     }
@@ -470,5 +470,27 @@ fn sin_(n: f64) -> f64 {
 impl Calculator {
     pub fn new() -> Calculator {
         Calculator {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn math() {
+        let exec = |s: &str| {
+            tokenize(s)
+                .and_then(swap_words)
+                .and_then(execute)
+                .and_then(fmt_number)
+        };
+
+        assert_eq!(exec("2 + 2"), Some("4".to_string()));
+        assert_eq!(exec("asdfasdfawsdfuhyk"), None);
+        assert_eq!(exec("(15*5 - 6) - 20 "), Some("49".to_string()));
+        assert_eq!(exec("15*5 - 6 - 20 "), Some("49".to_string()));
+        assert_eq!(exec("-5*5 + 6"), Some("-19".to_string()));
+        assert_eq!(exec("-(-15*5 + 6 + 20)"), Some("49".to_string()));
     }
 }

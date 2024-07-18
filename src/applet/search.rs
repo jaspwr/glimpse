@@ -1,6 +1,6 @@
 use glimpse::string_similarity::word_similarity;
 
-use crate::{utils::HashFn};
+use crate::utils::HashFn;
 
 pub fn string_search(
     needle: &String,
