@@ -58,9 +58,9 @@ impl<K: Clone, V: Clone> From<(K, V)> for KeyValuePair<K, V> {
     }
 }
 
-impl<K: Clone, V: Clone> Into<(K, V)> for KeyValuePair<K, V> {
-    fn into(self) -> (K, V) {
-        (self.key, self.value)
+impl<K: Clone, V: Clone> From<KeyValuePair<K, V>> for (K, V) {
+    fn from(val: KeyValuePair<K, V>) -> Self {
+        (val.key, val.value)
     }
 }
 
@@ -111,7 +111,7 @@ where
         None
     }
 
-    pub fn insert<'a>(&mut self, db: &'a mut DBSession, key: K_in_db, value: V) {
+    pub fn insert(&mut self, db: &mut DBSession, key: K_in_db, value: V) {
         let mut bucket = self.get_bucket(db, &key);
 
         bucket.remove(db, |kvp: &KeyValuePair<K_in_db, V>, db: &mut DBSession| {
@@ -120,11 +120,7 @@ where
         bucket.push(db, (key, value).into());
     }
 
-    fn get_bucket<'a, KHashable>(
-        &'a mut self,
-        db: &mut DBSession,
-        key: &KHashable,
-    ) -> Bucket<K_in_db, V>
+    fn get_bucket<KHashable>(&mut self, db: &mut DBSession, key: &KHashable) -> Bucket<K_in_db, V>
     where
         KHashable: HashWithDBAccess,
     {
@@ -144,11 +140,10 @@ where
 
         assert!(borrow.len() == buckets_count);
 
-        let bucket = (*borrow[bucket_index]).clone();
         // This is just the list head it can be cloned as it only
         // contains a pointer.
 
-        bucket
+        (*borrow[bucket_index]).clone()
     }
 
     pub fn len(&self, db: &mut DBSession) -> usize {
@@ -175,9 +170,9 @@ where
 
         let mut items = vec![];
 
-        let buckets: Vec<Bucket<K_in_db, V>> = (0..bucket_count).into_iter().map(|bucket_index| {
-            buckets[bucket_index].clone()
-        }).collect();
+        let buckets: Vec<Bucket<K_in_db, V>> = (0..bucket_count)
+            .map(|bucket_index| buckets[bucket_index].clone())
+            .collect();
 
         for bucket_index in 0..bucket_count {
             let bucket = buckets[bucket_index].clone();
@@ -191,9 +186,7 @@ where
     pub fn into_iter(&self, db: &mut DBSession) -> <Vec<(K_in_db, V)> as IntoIterator>::IntoIter {
         self.flatten(db).into_iter()
     }
-
 }
-
 
 pub trait CompareWith<K> {
     fn compare_with(&self, other: &K, db: &mut DBSession) -> bool;
@@ -303,10 +296,7 @@ mod tests {
 
         let flattened = map.flatten(&mut session);
         // NOTE: Order is deterministic but not somewhat random.
-        assert_eq!(flattened, vec![
-            (123, 4),
-            (12, 5),
-        ]);
+        assert_eq!(flattened, vec![(123, 4), (12, 5),]);
 
         let mut map_2 = DBHashMap::<u32, DBString>::new(&mut session, 1);
         let s1 = "TESTTESTTEST".to_string();

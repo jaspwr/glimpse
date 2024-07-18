@@ -66,7 +66,7 @@ impl StringSearchDb {
 
     pub fn insert_if_new(&mut self, word: &String, points_to: Option<String>) {
         let mut db = self.db.lock().unwrap();
-        if self.trie.get(&mut db, word).len() == 0 {
+        if self.trie.get(&mut db, word).is_empty() {
             self.trie
                 .insert(&mut db, word.as_str(), &points_to.unwrap());
         }

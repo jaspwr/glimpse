@@ -57,7 +57,8 @@ where
     }
 
     pub fn remove(&mut self, db: &mut DBSession, cmp: impl Fn(&T, &mut DBSession) -> bool)
-    where T: Clone
+    where
+        T: Clone,
     {
         let mut current = self.fetch_current_head(db);
 
@@ -101,13 +102,15 @@ where
 
     fn fetch_current_head(&self, db: &mut DBSession) -> SerializableDBPointer<DBListNode<T>> {
         let head_ptr = self.head.to_ptr();
-        let mut head_borrowed = db.borrow_mut(&head_ptr);
+        let head_borrowed = db.borrow_mut(&head_ptr);
         assert!(head_borrowed.len() == 1);
         head_borrowed[0].clone()
     }
 
     pub fn iter<'a>(&'a self, db: &'a mut DBSession) -> DBListIter<'a, T>
-    where T: Clone {
+    where
+        T: Clone,
+    {
         let current_head = self.fetch_current_head(db);
 
         DBListIter {

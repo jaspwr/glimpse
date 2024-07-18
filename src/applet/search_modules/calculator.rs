@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use glimpse::prelude::*;
 use gtk::traits::{ContainerExt, LabelExt, WidgetExt};
 
 use crate::exec::write_clipboard;
@@ -25,7 +24,7 @@ impl SearchModule for Calculator {
                 relevance: f32::INFINITY,
                 id: 0x3141592653,
                 on_select: Some(Box::new(move || {
-                    let _ = write_clipboard(&*solution.clone());
+                    let _ = write_clipboard(&solution.clone());
                 })),
                 render,
                 preview_window_data: crate::preview_window::PreviewWindowShowing::None,
@@ -67,7 +66,7 @@ fn render(solution: String) -> gtk::Box {
     container
 }
 
-fn fmt_number(mut n: f64) -> Option<String> {
+fn fmt_number(n: f64) -> Option<String> {
     if n.is_nan() {
         "Math error".to_string().into()
     } else if n.is_infinite() {
@@ -156,10 +155,10 @@ fn tokenize(exp: &str) -> Option<Vec<Token>> {
         // NOTE: Having operator always mark the end of a token only allows single
         //       character operators. If for whatever reason you want to implement
         //       multi-character operators this needs to do something a little smarter.
-        if cat != pre_cat || cat == CharCategory::Paren || cat == CharCategory::Operator {
-            if word.len() > 0 {
-                append_token(&pre_cat, &mut word, &mut tokens)?;
-            }
+        if (cat != pre_cat || cat == CharCategory::Paren || cat == CharCategory::Operator)
+            && !word.is_empty()
+        {
+            append_token(&pre_cat, &mut word, &mut tokens)?;
         }
         pre_cat = cat;
         word.push(c);
@@ -167,7 +166,7 @@ fn tokenize(exp: &str) -> Option<Vec<Token>> {
 
     append_token(&pre_cat, &mut word, &mut tokens)?;
 
-    if tokens.len() == 0 {
+    if tokens.is_empty() {
         return None;
     }
     Some(tokens)
@@ -240,7 +239,7 @@ fn swap_words(tokens: Vec<Token>) -> Option<Vec<Token>> {
 fn execute(tokens: Vec<Token>) -> Option<f64> {
     let (ts, n) = parse(tokens)?;
 
-    if ts.len() == 0 {
+    if ts.is_empty() {
         Some(n.unwrap())
     } else {
         None
@@ -363,13 +362,13 @@ fn pow_(ts: Tokens) -> PartialExpr {
 
 #[rustfmt::skip]
 fn call(ts: Tokens) -> PartialExpr {
-    let first_token = ts.iter().next()?;
+    let first_token = ts.first()?;
     if let Token::Function(name) = first_token {
         let ts = ts[1..].to_vec();
         let (ts, n) = brack(ts)?;
 
         let n = n.unwrap(); // brack never returns epsilon
-        let n = run_fn(&name, n)?;
+        let n = run_fn(name, n)?;
         Some((ts, Value::wrap(n)))
     } else {
         brack(ts)
@@ -415,10 +414,7 @@ fn brack(ts: Tokens) -> PartialExpr {
     match try_consume(&ts, Token::Paren('(')) {
         Some(ts) => parse(ts)
             .and_then(|(ts, left)|
-                match try_consume(&ts, Token::Paren(')')) {
-                    Some(ts) => Some((ts, left)),
-                    None => None
-                }),
+                try_consume(&ts, Token::Paren(')')).map(|ts| (ts, left))),
         None => unary_minus(ts)
     }
 }
@@ -436,7 +432,7 @@ fn unary_minus(ts: Tokens) -> PartialExpr {
 }
 
 fn literal(ts: Tokens) -> PartialExpr {
-    if let Some(Token::Number(n)) = ts.iter().next() {
+    if let Some(Token::Number(n)) = ts.first() {
         Some((ts[1..].to_vec(), Value::wrap(*n)))
     } else {
         None

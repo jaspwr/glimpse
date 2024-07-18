@@ -1,18 +1,13 @@
 use std::sync::Mutex;
-use std::{collections::HashMap, fs, io::Write, path::PathBuf};
+use std::{fs, io::Write, path::PathBuf};
 
 use chrono;
 
 use once_cell::sync::Lazy;
 
-use savefile_derive::Savefile;
-
 use crate::config::CONF;
 use crate::db::hashmap_db::HashMapDB;
-use crate::db::list::DBList;
-use crate::db::string::DBString;
 use crate::db::string_search_db::StringSearchDb;
-use crate::prelude::*;
 use crate::tfidf::{add_document_to_corpus, TfIdfMap};
 
 pub const FILE_DB_READ: i32 = 0b1;
@@ -92,7 +87,7 @@ impl FileIndex {
         access_flags: i32,
     ) -> Result<FileIndex, Box<dyn std::error::Error>> {
         if !path.exists() {
-            std::fs::create_dir_all(&path).unwrap();
+            std::fs::create_dir_all(path).unwrap();
         }
 
         if Self::is_locked(path) {
@@ -119,7 +114,7 @@ impl FileIndex {
         Self::lock(path).unwrap();
 
         if !path.exists() {
-            std::fs::create_dir_all(&path).unwrap();
+            std::fs::create_dir_all(path).unwrap();
         }
 
         StringSearchDb::reset(Self::files_path(path));
@@ -202,7 +197,7 @@ impl FileIndex {
             return true;
         }
 
-        return false;
+        false
     }
 
     pub fn remove_all_locks() {
@@ -328,7 +323,7 @@ fn handle_char(
 
     if is_alphanum != *pre_is_alpha || *word_buf_index == WORD_BUF_SIZE {
         if *pre_is_alpha {
-            append_word(&word_buf, *word_buf_index, tokens);
+            append_word(word_buf, *word_buf_index, tokens);
         }
 
         *word_buf_index = 0;

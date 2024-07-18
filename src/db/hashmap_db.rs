@@ -7,7 +7,7 @@ use std::{
 
 use crate::db::allocator::SaveableDBPointer;
 
-use super::allocator::{CopyToDB, DBPointer, SerializableDBPointer};
+use super::allocator::SerializableDBPointer;
 use super::hashmap::{CompareWith, EqWithDBAccess, HashWithDBAccess};
 use super::list::DBList;
 use super::string::DBString;
@@ -42,7 +42,7 @@ where
 
             (map, corpus_size)
         } else {
-            assert!(db.meta.pointer_store.len() == 0);
+            assert!(db.meta.pointer_store.is_empty());
             let map = DBHashMap::<K_in_db, V>::new(&mut db, buckets_count);
             let map_alloc = db.alloc(vec![map.clone()]);
             db.meta
@@ -80,7 +80,7 @@ where
     }
 
     pub fn save_meta(&mut self) {
-        let mut db = self.db.lock().unwrap();
+        let db = self.db.lock().unwrap();
         db.meta.save();
     }
 
@@ -90,7 +90,7 @@ where
 
     pub fn corpus_size(&mut self) -> usize {
         let mut db = self.db.lock().unwrap();
-        (*db).borrow_mut(&self.corpus_size.to_ptr())[0].clone()
+        *(*db).borrow_mut(&self.corpus_size.to_ptr())[0]
     }
 
     pub fn increment_corpus_size(&mut self) {
@@ -100,14 +100,14 @@ where
 
     pub fn alloc_string(&mut self, string: String) -> DBString {
         let mut db = self.db.lock().unwrap();
-        let str = DBString::new(&mut db, string);
-        str
+
+        DBString::new(&mut db, string)
     }
 
     pub fn new_list<T: Clone>(&mut self) -> DBList<T> {
         let mut db = self.db.lock().unwrap();
-        let list = DBList::new(&mut db);
-        list
+
+        DBList::new(&mut db)
     }
 
     pub fn push_to_list<T: Clone>(&mut self, list: &mut DBList<T>, value: T) {
@@ -115,7 +115,11 @@ where
         list.push(&mut db, value);
     }
 
-    pub fn remove_from_list<T: Clone + CompareWith<T>, U: Clone>(&mut self, list: &mut DBList<(U, T)>, value: &T) {
+    pub fn remove_from_list<T: Clone + CompareWith<T>, U: Clone>(
+        &mut self,
+        list: &mut DBList<(U, T)>,
+        value: &T,
+    ) {
         let mut db = self.db.lock().unwrap();
         list.remove(&mut db, |v, db| v.1.compare_with(value, db));
     }

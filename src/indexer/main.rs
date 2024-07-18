@@ -1,17 +1,11 @@
 use std::{
-    collections::HashMap,
     fs::{self, DirEntry},
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
-
-use docx_rs::*;
-use lopdf::Document;
 
 use glimpse::{
     config::CONF,
-    db::{string::DBString, string_search_db::StringSearchDb},
-    file_index::{self, tokenize_string, FileIndex, IsLocked, FILE_DB_READ, FILE_DB_WRITE},
-    tfidf::add_document_to_corpus,
+    file_index::{FileIndex, FILE_DB_READ, FILE_DB_WRITE},
 };
 
 fn main() {
@@ -50,7 +44,7 @@ fn reindex() {
 
     for path in &CONF.search_paths {
         let _ = index_dir(
-            &path,
+            path,
             &CONF.search_hidden_folders,
             &mut idx,
             &CONF.ignore_directories,
@@ -94,7 +88,7 @@ fn reindex() {
 
 #[inline]
 fn is_hidden_file(file: &DirEntry) -> bool {
-    file.file_name().to_str().unwrap().starts_with(".")
+    file.file_name().to_str().unwrap().starts_with('.')
 }
 
 fn index_dir(
@@ -112,11 +106,11 @@ fn index_dir(
         return Ok(());
     }
 
-    let mut dir = std::fs::read_dir(&path)?;
+    let dir = std::fs::read_dir(path)?;
 
     idx.add_dir(path);
 
-    while let Some(entry) = dir.next() {
+    for entry in dir {
         let _ = handle_dir_entry(entry, index_hidden, idx, ignore_dirs);
     }
 

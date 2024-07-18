@@ -1,4 +1,4 @@
-use gtk::traits::{ContainerExt, GridExt, WidgetExt, StyleContextExt};
+use gtk::traits::{ContainerExt, GridExt, StyleContextExt, WidgetExt};
 
 use glimpse::prelude::*;
 
@@ -23,7 +23,9 @@ pub fn standard_entry(
         let description_label = gtk::Label::with_mnemonic(&description);
         description_label.set_halign(gtk::Align::Start);
         description_label.set_opacity(0.6);
-        description_label.style_context().add_class("result-subtext");
+        description_label
+            .style_context()
+            .add_class("result-subtext");
         text_container.add(&description_label);
     }
 

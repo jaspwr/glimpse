@@ -165,7 +165,7 @@ pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
             }
 
             for path in &conf.search_paths {
-                if !PathBuf::from(path.clone()).exists() {
+                if !path.clone().exists() {
                     return Err("Indexing location does not exist.".to_string().into());
                 }
             }

@@ -1,6 +1,5 @@
 use std::marker::PhantomData;
 
-use bytes::Bytes;
 use savefile_derive::Savefile;
 
 use super::session::DBSession;
@@ -91,9 +90,9 @@ impl<T> Clone for SerializableDBPointer<T> {
     fn clone(&self) -> Self {
         Self {
             chunk: self.chunk.clone(),
-            length: self.length.clone(),
+            length: self.length,
             phantom: PhantomData,
-            is_null: self.is_null.clone(),
+            is_null: self.is_null,
         }
     }
 }
@@ -155,7 +154,6 @@ where
     }
 }
 
-
 impl DBSession {
     pub fn alloc<T: CopyToDB>(&mut self, value: Vec<T>) -> DBPointer<T> {
         let len = ArrayLength(value.len());
@@ -214,15 +212,13 @@ impl DBSession {
 
         assert!(BytesLength(end.0) < self.capacity);
 
-        let chunk_desc = DBChunkDescriptor {
+        // self.meta.chunk_descriptors.push(chunk_desc);
+
+        DBChunkDescriptor {
             start,
             length,
             allocated: true,
-        };
-
-        // self.meta.chunk_descriptors.push(chunk_desc);
-
-        chunk_desc
+        }
     }
 
     fn free(&mut self, chunk: DBChunkDescriptor) {
@@ -250,11 +246,7 @@ impl DBSession {
     //     }
     // }
 
-    fn borrow_mut_raw<'a, T>(
-        &'a mut self,
-        position: Address,
-        amount: ArrayLength,
-    ) -> Vec<&'a mut T> {
+    fn borrow_mut_raw<T>(&mut self, position: Address, amount: ArrayLength) -> Vec<&mut T> {
         let item_length = std::mem::size_of::<T>();
 
         // FIXME: This sucks... Make some helper methods for converting these tuple
@@ -271,12 +263,13 @@ impl DBSession {
         assert!(position.0 % std::mem::align_of::<T>() == 0);
 
         (0..amount.0)
-            .into_iter()
             .map(|i| {
                 let mmap = self.mmap.as_mut().unwrap();
                 let ptr = &mmap[position.0 + i * item_length] as *const u8;
                 #[allow(invalid_reference_casting)]
-                unsafe { &mut *(ptr as *mut T) }
+                unsafe {
+                    &mut *(ptr as *mut T)
+                }
             })
             .collect()
     }
@@ -304,7 +297,7 @@ mod tests {
     use std::{fs, path::PathBuf};
 
     use crate::db::{
-        allocator::{overlapping_chunks, Address, ArrayLength, BytesLength},
+        allocator::{Address, ArrayLength, BytesLength},
         session::{meta_path, DBSession},
     };
 

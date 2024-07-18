@@ -2,7 +2,6 @@ use async_trait::async_trait;
 use gtk::traits::{ContainerExt, GridExt, LabelExt, WidgetExt};
 
 use crate::utils;
-use glimpse::prelude::*;
 
 use super::{SearchModule, SearchResult};
 
@@ -17,7 +16,7 @@ impl Dictionary {
 #[async_trait]
 impl SearchModule for Dictionary {
     async fn search(&self, query: String, _: u32) -> Vec<SearchResult> {
-        if query.len() == 0 {
+        if query.is_empty() {
             return vec![];
         }
 
@@ -35,7 +34,7 @@ async fn try_fetch(query: String) -> Option<SearchResult> {
     let mut query = query.to_lowercase();
     let mut relevance: f32 = 1.5;
 
-    if query.len() == 0 {
+    if query.is_empty() {
         return None;
     }
 
@@ -73,7 +72,7 @@ fn create_result(response: String, relevance: f32) -> Option<SearchResult> {
 
     let phonetics = response[0]["phonetics"][1]["text"]
         .as_str()
-        .and_then(|ph| Some(ph.to_string()));
+        .map(|ph| ph.to_string());
 
     let part_of_speach = match response[0]["meanings"][0]["partOfSpeech"].as_str() {
         Some(particle_of_speach) => particle_of_speach.to_string(),

@@ -13,8 +13,7 @@ use crate::{
     exec::{execute_detached, xdg_open},
     icon,
     result_templates::standard_entry,
-    search::string_search,
-    utils::{benchmark, needs_reindex, simple_hash_nonce, HashFn},
+    utils::{benchmark, needs_reindex, simple_hash_nonce},
 };
 
 use super::{SearchModule, SearchResult};
@@ -36,7 +35,7 @@ struct FileResult {
 #[async_trait]
 impl SearchModule for Files {
     async fn search(&self, query: String, max_results: u32) -> Vec<SearchResult> {
-        if query.len() == 0 {
+        if query.is_empty() {
             return vec![];
         }
 
@@ -94,7 +93,7 @@ impl SearchModule for Files {
                     _tf_idf(corpus_size, index.tf_idf.clone(), &token)
                         .iter()
                         .for_each(|(r, s)| {
-                            let s = index.tf_idf.get_string(&s);
+                            let s = index.tf_idf.get_string(s);
                             push(&mut files, &s, (*r / 17.).clamp(0., 2.), FileType::File);
                         });
 
@@ -108,7 +107,7 @@ impl SearchModule for Files {
                         _tf_idf(corpus_size, index.tf_idf.clone(), &term)
                             .iter()
                             .for_each(|(r, s)| {
-                                let s = index.tf_idf.get_string(&s);
+                                let s = index.tf_idf.get_string(s);
                                 let r = ((*r * similarity) / 20.).clamp(0., 2.);
                                 push(&mut files, &s, r, FileType::File);
                             });
@@ -119,7 +118,7 @@ impl SearchModule for Files {
             files
                 .into_iter()
                 .filter(|(s, _)| PathBuf::from(s).exists())
-                .map(|(s, res)| self.create_result(&s, res.relevance / 2., res.kind, hash_fn(&*s)))
+                .map(|(s, res)| self.create_result(&s, res.relevance / 2., res.kind, hash_fn(&s)))
                 .collect::<Vec<SearchResult>>()
         } else {
             vec![]
@@ -129,7 +128,7 @@ impl SearchModule for Files {
 
 fn merge_results(results: &mut Vec<SearchResult>) {
     let mut relevances: HashMap<SearchResultId, Relevance> = HashMap::new();
-    for result in results.into_iter() {
+    for result in results.iter_mut() {
         match relevances.get(&result.id) {
             Some(r) => {
                 let new_r = result.relevance + r;
@@ -322,4 +321,3 @@ impl Files {
         Files { index }
     }
 }
-

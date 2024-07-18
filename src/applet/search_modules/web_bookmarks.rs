@@ -3,11 +3,11 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use async_trait::async_trait;
 use sqlite::State;
 
+use crate::app::BoxedRuntime;
 use crate::{
     exec::xdg_open, icon, result_templates::standard_entry, search::string_search,
     utils::simple_hash_nonce,
 };
-use crate::app::BoxedRuntime;
 
 use super::{SearchModule, SearchResult};
 
@@ -30,7 +30,7 @@ impl SearchModule for WebBookmarks {
         if let Some(list) = list {
             string_search(&query, &list.titles, max_results, &hash_fn, false)
                 .into_iter()
-                .map(|(name, rel)| Self::create_result(&name, rel, &list.url_map, hash_fn(&*name)))
+                .map(|(name, rel)| Self::create_result(&name, rel, &list.url_map, hash_fn(&name)))
                 .collect()
         } else {
             vec![]
@@ -96,11 +96,7 @@ impl WebBookmarks {
 }
 
 fn get_chromium_bookmarks() -> Vec<BookmarkEntry> {
-    if let Some(bookmarks) = __get_chromium_bookmarks() {
-        bookmarks
-    } else {
-        vec![]
-    }
+    __get_chromium_bookmarks().unwrap_or_default()
 }
 
 fn __get_chromium_bookmarks() -> Option<Vec<BookmarkEntry>> {
@@ -158,10 +154,8 @@ fn handle_children_list(children: &Vec<serde_json::Value>) -> Vec<BookmarkEntry>
     for child in children {
         if let Some(entry) = try_create_child(child) {
             list.push(entry);
-        } else {
-            if let Some(children) = child["children"].as_array() {
-                list.append(&mut handle_children_list(children));
-            }
+        } else if let Some(children) = child["children"].as_array() {
+            list.append(&mut handle_children_list(children));
         }
     }
 

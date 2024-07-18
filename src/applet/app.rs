@@ -7,7 +7,7 @@ use std::{
 };
 
 use futures::{future::abortable, stream::AbortHandle};
-use gdk::{cairo::Path, glib::once_cell::sync::Lazy};
+use gdk::glib::once_cell::sync::Lazy;
 use gdk::{glib::idle_add_once, SeatCapabilities};
 use gtk::prelude::*;
 
@@ -16,8 +16,7 @@ static CONTROL: AtomicBool = AtomicBool::new(false);
 use glimpse::{
     biases::increment_bias,
     config::{CONF, CONF_FILE_PATH, CSS},
-    db::string_search_db::StringSearchDb,
-    file_index::{self, FileIndex},
+    file_index::FileIndex,
 };
 use preview_window::{PreviewWindowShowing, SafeBox};
 use search_modules::{SearchModule, SearchResult};
@@ -428,7 +427,7 @@ fn add_style_provider(style_provider: gtk::CssProvider) {
 }
 
 fn create_err_msg(error_title: String, err_msg: &String, container: &gtk::Box) {
-    let error_title = gtk::Label::new(Some(&error_title.as_str()));
+    let error_title = gtk::Label::new(Some(error_title.as_str()));
 
     error_title.set_halign(gtk::Align::Start);
     error_title.set_line_wrap(true);
@@ -532,7 +531,7 @@ fn free_entry_data(widget: &gtk::Widget) {
     }
 }
 
-fn use_entry_data(widget: &gtk::ListBoxRow, action: Box<dyn Fn(&ResultData) -> ()>) {
+fn use_entry_data(widget: &gtk::ListBoxRow, action: Box<dyn Fn(&ResultData)>) {
     unsafe {
         if let Some(data_ptr) = widget.steal_data::<*mut ResultData>("dat") {
             let data = Box::from_raw(data_ptr);
@@ -636,13 +635,11 @@ fn handle_list_keypress(key: gdk::keys::Key, search_field: Arc<gtk::Entry>, list
                 return;
             }
             search_field.set_text((text + &key.to_string()).as_str());
-        } else {
-            if !text.is_empty() {
-                if control {
-                    search_field.set_text("");
-                } else {
-                    search_field.set_text(&text[0..text.len() - 1]);
-                }
+        } else if !text.is_empty() {
+            if control {
+                search_field.set_text("");
+            } else {
+                search_field.set_text(&text[0..text.len() - 1]);
             }
         }
         list.unselect_all();
@@ -676,7 +673,7 @@ unsafe impl Send for SafeListBox {}
 unsafe impl Sync for SafeListBox {}
 
 pub async fn append_results(results: Vec<SearchResult>, list: Arc<std::sync::Mutex<SafeListBox>>) {
-    let mut results = results;
+    let results = results;
     // results.sort_by(|a, b| a.relevance.partial_cmp(&b.relevance).unwrap());
 
     idle_add_once(move || {
@@ -769,7 +766,7 @@ fn find_slot(relevance: f32, id: u64, list: &SafeListBox) -> Option<i32> {
 struct ResultData {
     relevance: f32,
     id: u64,
-    action: Option<Box<dyn Fn() -> () + Sync + Send>>,
+    action: Option<Box<dyn Fn() + Sync + Send>>,
     preview_window_data: PreviewWindowShowing,
 }
 

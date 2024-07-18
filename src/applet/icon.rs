@@ -1,8 +1,8 @@
 use std::fs;
 
 use gdk::gdk_pixbuf;
-use gtk::traits::IconThemeExt;
 use glimpse::config::CONF;
+use gtk::traits::IconThemeExt;
 
 use crate::utils::is_cli_app;
 
@@ -64,7 +64,7 @@ fn __find_application_icon(name: &String) -> Option<gtk::Image> {
 
     for path in possible_locations.iter() {
         let mut path = path.clone();
-        path.push_str("/");
+        path.push('/');
         path.push_str(name);
         for extension in POSSIBLE_EXTENSIONS.iter() {
             let mut path = path.clone();
@@ -76,7 +76,7 @@ fn __find_application_icon(name: &String) -> Option<gtk::Image> {
             }
         }
     }
-    return None;
+    None
 }
 
 pub fn from_gtk(path: &str) -> Option<gtk::Image> {

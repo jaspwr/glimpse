@@ -1,6 +1,6 @@
-use crate::{app::BoxedRuntime, exec::execute_detached, preview_window::PreviewWindowShowing};
+use crate::{app::BoxedRuntime, preview_window::PreviewWindowShowing};
 use async_trait::async_trait;
-use glimpse::{config::CONF, file_index};
+use glimpse::config::CONF;
 
 pub struct SearchResult {
     pub render: Box<dyn Fn() -> gtk::Box>,

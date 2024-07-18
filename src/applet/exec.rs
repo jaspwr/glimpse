@@ -1,4 +1,4 @@
-use std::{process::Command, io::Write};
+use std::{io::Write, process::Command};
 
 use execute::Execute;
 

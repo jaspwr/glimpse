@@ -8,12 +8,12 @@ use execute::Execute;
 use glimpse::config::CONF;
 
 use crate::{
+    app::BoxedRuntime,
     exec::execute_detached,
     icon,
     result_templates::standard_entry,
     search::string_search,
-    utils::{self, is_cli_app, benchmark, HashFn, simple_hash_nonce},
-    app::BoxedRuntime,
+    utils::{benchmark, is_cli_app, simple_hash_nonce},
 };
 
 use super::{SearchModule, SearchResult};
@@ -40,7 +40,10 @@ impl Commands {
         });
 
         if let Some(benchmark) = benchmark {
-            println!("Commands module loaded in {:?}", benchmark.elapsed().unwrap());
+            println!(
+                "Commands module loaded in {:?}",
+                benchmark.elapsed().unwrap()
+            );
         }
 
         Commands { apps: apps_store }
@@ -61,9 +64,9 @@ impl Commands {
             standard_entry(name, icon, desc)
         };
 
-        let hash = simple_hash_nonce(&*self.name());
+        let hash = simple_hash_nonce(&self.name());
 
-        let id = hash(&*name);
+        let id = hash(&name);
 
         let run = move || {
             if is_cli_app(&name) {
@@ -72,8 +75,6 @@ impl Commands {
                 let _ = execute_detached(name.clone());
             }
         };
-
-
 
         SearchResult {
             render: Box::new(render),
@@ -90,7 +91,7 @@ impl SearchModule for Commands {
     async fn search(&self, query: String, max_results: u32) -> Vec<SearchResult> {
         let rc = self.apps.clone();
         let lock = rc.lock().await;
-        let hash_fn = simple_hash_nonce(&*self.name());
+        let hash_fn = simple_hash_nonce(&self.name());
         if let Some(apps) = lock.as_ref() {
             string_search(&query, apps, max_results, &hash_fn, true)
                 .into_iter()
@@ -113,12 +114,9 @@ fn which(name: &String) -> String {
     let output = command.execute_output().unwrap();
 
     let output = String::from_utf8(output.stdout).unwrap();
-    let first_line = match output.lines().next() {
-        Some(line) => line,
-        None => "",
-    };
+    let first_line = output.lines().next().unwrap_or_default();
 
-    return first_line.to_string();
+    first_line.to_string()
 }
 
 fn spawn_in_terminal(name: &String) {
@@ -143,7 +141,7 @@ fn get_list() -> Result<Vec<String>, ()> {
     let output = command.execute_output().unwrap();
 
     let output = String::from_utf8(output.stdout).unwrap();
-    let lines = output.lines().into_iter().map(|s| s.to_string()).collect();
+    let lines = output.lines().map(|s| s.to_string()).collect();
 
-    return Ok(lines);
+    Ok(lines)
 }

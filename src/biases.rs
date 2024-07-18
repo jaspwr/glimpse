@@ -1,4 +1,4 @@
-use crate::{config::CONF, file_index};
+use crate::config::CONF;
 use once_cell::sync::Lazy;
 use savefile_derive::Savefile;
 use std::{collections::HashMap, path::PathBuf};

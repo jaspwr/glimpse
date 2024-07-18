@@ -1,10 +1,5 @@
-use crate::prelude::Relevance;
-
 use super::{
-    allocator::{DBPointer, SerializableDBPointer},
-    hashmap::DBHashMap,
-    list::DBList,
-    session::DBSession,
+    allocator::SerializableDBPointer, hashmap::DBHashMap, list::DBList, session::DBSession,
     string::DBString,
 };
 
@@ -35,7 +30,7 @@ impl DBTrie {
 
         // println!("inserting {:?} -> {:?}", word, points_to);
         let ptr = self.root.to_ptr();
-        let mut borrow = db.borrow_mut(&ptr);
+        let borrow = db.borrow_mut(&ptr);
         assert!(borrow.len() == 1);
         let mut root = borrow[0].clone();
 
@@ -50,14 +45,14 @@ impl DBTrie {
         let mut matches = vec![];
 
         let ptr = self.root.to_ptr();
-        let mut borrow = db.borrow_mut(&ptr);
+        let borrow = db.borrow_mut(&ptr);
         assert!(borrow.len() == 1);
         let mut current = borrow[0].clone();
 
         for c in word.chars() {
             if let Some(next) = current.get_child_from_char(db, c) {
                 let ptr = next.to_ptr();
-                let mut borrow = db.borrow_mut(&ptr);
+                let borrow = db.borrow_mut(&ptr);
                 assert!(borrow.len() == 1);
                 current = borrow[0].clone();
             } else {
@@ -77,11 +72,11 @@ impl DBTrie {
 
         // }
 
-        let mut points_to = current.points_to;
+        let points_to = current.points_to;
 
         push_matches(points_to, db, &mut matches);
 
-        return matches;
+        matches
     }
 
     pub fn fuzzy_get(&self, db: &mut DBSession, word: &str) -> Vec<String> {
@@ -120,7 +115,7 @@ impl DBTrieNode {
             let rest = chars.as_str();
 
             let ptr = self.children.to_ptr();
-            let mut borrow = db.borrow_mut(&ptr);
+            let borrow = db.borrow_mut(&ptr);
             assert!(borrow.len() == 1);
             let mut children = borrow[0].clone(); // Only contains a pointer so can be cloned
 
@@ -225,7 +220,6 @@ impl DBTrieNode {
                 return;
             }
 
-
             let child = child.to_ptr();
             let borrow = db.borrow_mut(&child);
             assert!(borrow.len() == 1);
@@ -240,7 +234,7 @@ impl DBTrieNode {
         c: char,
     ) -> Option<SerializableDBPointer<DBTrieNode>> {
         let ptr = self.children.to_ptr();
-        let mut borrow = db.borrow_mut(&ptr);
+        let borrow = db.borrow_mut(&ptr);
         assert!(borrow.len() == 1);
         let mut children = borrow[0].clone(); // Only contains a pointer so can be cloned
 
@@ -265,8 +259,8 @@ fn fuzzy_get(
 fn allocate_string(db: &mut DBSession, points_to: &str) -> SerializableDBPointer<DBString> {
     let points_to = DBString::new(db, points_to.to_string());
     let points_to = db.alloc(vec![points_to]);
-    let points_to = points_to.to_serializable();
-    points_to
+
+    points_to.to_serializable()
 }
 
 #[cfg(test)]

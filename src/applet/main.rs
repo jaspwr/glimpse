@@ -1,4 +1,6 @@
 #[cfg(feature = "app")]
+mod app;
+#[cfg(feature = "app")]
 mod exec;
 #[cfg(feature = "app")]
 mod icon;
@@ -12,8 +14,6 @@ mod search;
 mod search_modules;
 #[cfg(feature = "app")]
 mod utils;
-#[cfg(feature = "app")]
-mod app;
 
 fn main() {
     #[cfg(feature = "app")]

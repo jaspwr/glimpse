@@ -81,7 +81,7 @@ fn remove_lowest_tf_idf_for_token(corpus_size: usize, mut map: TfIdfMap, token: 
         return;
     }
 
-    if tf_idf.len() == 0 {
+    if tf_idf.is_empty() {
         return;
     }
 
@@ -127,7 +127,7 @@ fn is_suitable_token(token: &String) -> bool {
 }
 
 fn add_term(mut map: StringSearchDb, term: &String) {
-    map.insert_if_new(&term, Some(term.clone()));
+    map.insert_if_new(term, Some(term.clone()));
 }
 
 fn load_as_pdf(path: &PathBuf) -> Option<String> {
@@ -192,7 +192,7 @@ fn handle_run(run: Box<Run>, ret: &mut String) {
     for child in run.children {
         match child {
             RunChild::Text(text) => {
-                *ret += format!("{}", text.text).as_str();
+                *ret += text.text.to_string().as_str();
             }
             _ => {}
         }

@@ -1,8 +1,9 @@
 use std::{collections::hash_map::DefaultHasher, hash::Hasher};
 
 use super::{
-    allocator::{DBPointer, SerializableDBPointer},
-    session::DBSession, hashmap::{HashWithDBAccess, EqWithDBAccess},
+    allocator::SerializableDBPointer,
+    hashmap::{EqWithDBAccess, HashWithDBAccess},
+    session::DBSession,
 };
 
 #[repr(C)]
@@ -50,9 +51,9 @@ impl EqWithDBAccess for DBString {
 
 #[cfg(test)]
 mod tests {
-    use std::{path::PathBuf, fs};
+    use std::{fs, path::PathBuf};
 
-    use crate::db::session::{remove_if_exists, meta_path};
+    use crate::db::session::{meta_path, remove_if_exists};
 
     use super::*;
 

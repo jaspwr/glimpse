@@ -11,7 +11,7 @@ pub fn string_search(
 ) -> Vec<(String, f32)> {
     let mut results = Vec::<(String, f32)>::new();
 
-    if needle.len() == 0 {
+    if needle.is_empty() {
         return results;
     }
 

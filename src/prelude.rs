@@ -17,7 +17,7 @@ impl Trunc for String {
     fn trunc(mut self, len: usize) -> Self {
         if self.len() > len {
             self.truncate(len);
-            self.push_str("…");
+            self.push('…');
         }
         self
     }

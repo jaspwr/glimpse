@@ -1,9 +1,12 @@
-use std::{path::PathBuf, sync::{Mutex, Arc}};
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 use gdk::gdk_pixbuf;
 use glimpse::config::CONF;
-use gtk::traits::{ContainerExt, WidgetExt, ScrolledWindowExt, LabelExt, GridExt, StyleContextExt};
-use pango::{WrapMode, glib::idle_add_once};
+use gtk::traits::{ContainerExt, GridExt, LabelExt, ScrolledWindowExt, StyleContextExt, WidgetExt};
+use pango::{glib::idle_add_once, WrapMode};
 // use poppler::PopplerDocument;
 
 use glimpse::prelude::*;
@@ -30,7 +33,7 @@ pub enum PreviewWindowContents {
     Image(PathBuf),
     TextFile(String, PathBuf),
     Directory(PathBuf),
-    Error(String)
+    Error(String),
 }
 
 impl PreviewWindow {
@@ -54,7 +57,7 @@ impl PreviewWindow {
             }
             _ => {
                 todo!()
-            },
+            }
         }
     }
 
@@ -71,7 +74,11 @@ impl PreviewWindow {
     }
 }
 
-fn create_file_preview_widget(container_cpy: Arc<Mutex<SafeBox>>, prev: PreviewWindowContents, path: PathBuf) -> Option<()> {
+fn create_file_preview_widget(
+    container_cpy: Arc<Mutex<SafeBox>>,
+    prev: PreviewWindowContents,
+    path: PathBuf,
+) -> Option<()> {
     let container = container_cpy.clone();
     let container = container.lock().unwrap();
 
@@ -89,7 +96,7 @@ fn create_file_preview_widget(container_cpy: Arc<Mutex<SafeBox>>, prev: PreviewW
         PreviewWindowContents::Error(text) => plain_text_preview(text),
     });
 
-    let label = gtk::Label::new(Some(&format!("{}", path.to_str().unwrap())));
+    let label = gtk::Label::new(Some(path.to_str().unwrap()));
     label.set_line_wrap(true);
     label.set_wrap_mode(WrapMode::Char);
     label.set_max_width_chars(20);
@@ -106,7 +113,7 @@ async fn trunc_long_lines(text: String) -> String {
     for line in text.lines() {
         if line.len() > SPLIT_LEN {
             new_text.push_str(&line[..SPLIT_LEN]);
-            new_text.push_str("…");
+            new_text.push('…');
         } else {
             new_text.push_str(line);
         }
@@ -141,7 +148,7 @@ fn dir_listing(path: &PathBuf) -> gtk::Box {
             let (name, icon_name) = if entry.path().is_dir() {
                 (format!("/{}", file_name), "folder")
             } else {
-                (format!("{}", file_name), "folder-documents-symbolic")
+                (file_name.to_string(), "folder-documents-symbolic")
             };
 
             let grid = gtk::Grid::new();
@@ -160,10 +167,10 @@ fn dir_listing(path: &PathBuf) -> gtk::Box {
 }
 
 async fn try_from_infer(path: &PathBuf) -> Option<PreviewWindowContents> {
-    let kind = infer::get_from_path(&path).ok()??;
+    let kind = infer::get_from_path(path).ok()??;
 
     if kind.mime_type().starts_with("text") {
-        create_plain_text_file_preview(&path).await?;
+        create_plain_text_file_preview(path).await?;
     }
 
     if kind.mime_type().starts_with("image") {
@@ -243,8 +250,6 @@ unsafe impl Send for SafeBox {}
 //             cr.set_source_rgb(1.0, 1.0, 1.0);
 //             cr.paint();
 
-
-
 //             drawing_area.connect_draw(move |_, context| {
 //                 context.set_source_surface(&surface, 0.0, 0.0);
 //                 context.paint();
@@ -255,4 +260,3 @@ unsafe impl Send for SafeBox {}
 
 //     Some(drawing_area)
 // }
-

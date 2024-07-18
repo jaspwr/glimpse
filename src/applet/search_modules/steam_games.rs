@@ -3,8 +3,8 @@ use std::{collections::HashMap, fs, sync::Arc};
 use async_trait::async_trait;
 
 use crate::{
-    exec::execute_detached, icon, result_templates::standard_entry, search::string_search,
-    utils::{simple_hash, simple_hash_nonce, HashFn}, app::BoxedRuntime,
+    app::BoxedRuntime, exec::execute_detached, icon, result_templates::standard_entry,
+    search::string_search, utils::simple_hash_nonce,
 };
 
 use super::{SearchModule, SearchResult};
@@ -50,11 +50,10 @@ impl SearchModule for SteamGames {
             false,
         )
         .into_iter()
-        .map(|(n, r)| create_result(data.as_ref().unwrap(), &n, r, hash_fn(&*n)))
+        .map(|(n, r)| create_result(data.as_ref().unwrap(), &n, r, hash_fn(&n)))
         .collect::<Vec<SearchResult>>()
     }
 }
-
 
 fn create_result(data: &GamesData, name: &String, relevance: f32, id: u64) -> SearchResult {
     let steam_id = *data.game_ids.get(name).unwrap();
@@ -148,7 +147,7 @@ fn handle_dir_entry(entry: fs::DirEntry, games: &mut Vec<Game>) {
     let mut appid = 0;
     let mut name = String::from("");
     let file = fs::read_to_string(entry.path()).unwrap();
-    file.lines().into_iter().for_each(|l| {
+    file.lines().for_each(|l| {
         if l.starts_with("\t\"appid\"") {
             appid = l.split('\"').nth(3).unwrap().parse::<u32>().unwrap();
         } else if l.starts_with("\t\"name\"") {

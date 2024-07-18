@@ -1,10 +1,9 @@
 use std::{
     fs::{self, OpenOptions},
     io::{self, Seek, Write},
-    path::PathBuf, marker::PhantomPinned,
+    path::PathBuf,
 };
 
-use execute::generic_array::typenum::Length;
 use memmap::{Mmap, MmapMut};
 use savefile_derive::Savefile;
 
@@ -48,14 +47,12 @@ impl DBSession {
 
         let capacity = BytesLength(mmap.len());
 
-        let session = Self {
+        Self {
             mmap: Some(mmap),
             meta,
             capacity,
             path,
-        };
-
-        session
+        }
     }
 
     pub fn reset(path: PathBuf) {
@@ -74,7 +71,7 @@ impl DBSession {
 
         println!("resized to {} MiB", new_capacity / (1024 * 1024));
 
-        let mut file = OpenOptions::new()
+        let file = OpenOptions::new()
             .write(true)
             .open(self.path.clone())
             .unwrap();
@@ -129,7 +126,7 @@ pub struct Meta {
     pub path: PathBuf,
     pub max_allocated: Address,
     // pub chunk_descriptors: Vec<DBChunkDescriptor>,
-    pub pointer_store: Vec<SaveableDBPointer>
+    pub pointer_store: Vec<SaveableDBPointer>,
 }
 
 const META_VERSION: u32 = 0;
@@ -178,7 +175,7 @@ mod tests {
         remove_if_exists(&path);
         remove_if_exists(&meta_path(&path));
 
-        let mut session = DBSession::open(path.clone());
+        let session = DBSession::open(path.clone());
 
         // session.resize(BytesLength(2047));
 
@@ -198,7 +195,7 @@ mod tests {
         let meta = Meta::new(&meta_path);
         meta.save();
 
-        let mut meta = Meta::load(&meta_path);
+        let meta = Meta::load(&meta_path);
         // assert_eq!(meta.chunk_descriptors.len(), 0);
 
         let chunk = DBChunkDescriptor {
