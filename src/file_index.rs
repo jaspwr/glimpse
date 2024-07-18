@@ -149,7 +149,8 @@ impl FileIndex {
         let file_name = path.file_name().unwrap().to_str().unwrap().to_string();
         let file_path = path.to_str().unwrap().to_string();
 
-        self.files.insert(file_name.clone(), Some(file_path.clone()));
+        self.files
+            .insert(file_name.clone(), Some(file_path.clone()));
 
         let keywords = file_name_inner_keywords(&file_name);
         for keyword in keywords {
@@ -166,10 +167,15 @@ impl FileIndex {
             return;
         }
 
-        let folder_name = path.file_name().unwrap().to_str().unwrap().to_string();
-        let dir_name = path.to_str().unwrap().to_string();
+        let dir_name = path.file_name().unwrap().to_str().unwrap().to_string();
+        let dir_path = path.to_str().unwrap().to_string();
 
-        self.dirs.insert(folder_name, Some(dir_name));
+        self.dirs.insert(dir_name.clone(), Some(dir_path.clone()));
+
+        let keywords = file_name_inner_keywords(&dir_name.clone());
+        for keyword in keywords {
+            self.dirs.insert(keyword.clone(), Some(dir_path.clone()));
+        }
     }
 
     fn lock(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {

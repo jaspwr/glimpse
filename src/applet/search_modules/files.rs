@@ -14,7 +14,7 @@ use crate::{
     icon,
     result_templates::standard_entry,
     search::string_search,
-    utils::{benchmark, simple_hash_nonce, HashFn},
+    utils::{benchmark, needs_reindex, simple_hash_nonce, HashFn},
 };
 
 use super::{SearchModule, SearchResult};
@@ -307,7 +307,7 @@ impl Files {
             let db_path = PathBuf::from(&CONF.indexing.location);
             let index = FileIndex::open(&db_path, FILE_DB_READ).ok();
 
-            if hasnt_indexed_for_days(CONF.indexing.full_reindex_after_days) {
+            if needs_reindex() {
                 println!("reindexing files");
                 let _ = execute_detached("glimpse-indexer".to_string());
             } else {
@@ -323,11 +323,3 @@ impl Files {
     }
 }
 
-fn hasnt_indexed_for_days(days: f32) -> bool {
-    let now = chrono::Utc::now().timestamp();
-    const HOUR: f32 = 60. * 60.;
-    const DAY: f32 = HOUR * 24.;
-
-    let db_path = PathBuf::from(&CONF.indexing.location);
-    now - FileIndex::last_indexed(&db_path).unwrap_or(0) > (DAY * days) as i64
-}

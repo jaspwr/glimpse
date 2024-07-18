@@ -23,7 +23,10 @@ use preview_window::{PreviewWindowShowing, SafeBox};
 use search_modules::{SearchModule, SearchResult};
 use utils::benchmark;
 
-use crate::{preview_window, search_modules, utils};
+use crate::{
+    preview_window, search_modules,
+    utils::{self, needs_reindex},
+};
 
 pub static RUNTIME: Lazy<BoxedRuntime> = Lazy::new(|| {
     let rt = tokio::runtime::Runtime::new().unwrap();
@@ -143,7 +146,7 @@ pub fn run_app() {
             create_err_msg(error_title, err, &container);
         }
 
-        if CONF.modules.files && PathBuf::from(&CONF.indexing.location).join("full_index_temp").exists() {
+        if CONF.modules.files && (needs_reindex() || PathBuf::from(&CONF.indexing.location).join("full_index_temp").exists()) {
             println!("locked");
             let box_ = gtk::Box::new(gtk::Orientation::Vertical, 0);
             let label = gtk::Label::new(Some("ⓘ Files are currently being indexed.\nPlease wait before searching for files."));

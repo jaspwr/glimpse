@@ -1,3 +1,7 @@
+use std::path::PathBuf;
+
+use glimpse::{config::CONF, file_index::FileIndex};
+
 pub fn simple_hash(s: &str) -> u64 {
     let mut ret: u64 = 0;
     for c in s.chars() {
@@ -38,6 +42,16 @@ pub fn benchmark() -> Option<BenchmarkTimer> {
     } else {
         None
     }
+}
+
+pub fn needs_reindex() -> bool {
+    let days = CONF.indexing.full_reindex_after_days;
+    let now = chrono::Utc::now().timestamp();
+    const HOUR: f32 = 60. * 60.;
+    const DAY: f32 = HOUR * 24.;
+
+    let db_path = PathBuf::from(&CONF.indexing.location);
+    now - FileIndex::last_indexed(&db_path).unwrap_or(0) > (DAY * days) as i64
 }
 
 pub fn is_cli_app(name: &String) -> bool {

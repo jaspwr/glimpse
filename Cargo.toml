@@ -12,9 +12,9 @@ path = "src/applet/main.rs"
 name = "glimpse-indexer"
 path = "src/indexer/main.rs"
 
-[[bin]]
-name = "glimpse-monitor"
-path = "src/monitor/main.rs"
+# [[bin]]
+# name = "glimpse-monitor"
+# path = "src/monitor/main.rs"
 
 # [profile.release]
 # debug = true
@@ -62,5 +62,5 @@ sqlite = { version = "0.31.0", optional = true }
 tokio = { version = "1.29.1", features = ["full"] }
 toml = "0.8.2"
 url = "2.4.0"
-fanotify-rs = "0.3.1"
-nix = {version = "0.27.1", features = ["poll"] }
+# fanotify-rs = "0.3.1"
+# nix = {version = "0.27.1", features = ["poll"] }
