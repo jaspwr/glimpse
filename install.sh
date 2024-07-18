@@ -12,15 +12,29 @@ cargo build --release --features app &&
 
 ./target/release/glimpse-indexer --init &&
 
-sudo cp target/release/glimpse /usr/local/bin &&
-sudo cp target/release/glimpse-indexer /usr/local/bin &&
-sudo cp target/release/glimpse-monitor /usr/local/bin &&
+installdir="/usr/local/bin"
 
-sudo cp glimpse-monitor.service /etc/systemd/system/ &&
+sudo cp target/release/glimpse $installdir &&
+sudo cp target/release/glimpse-indexer $installdir &&
+sudo cp target/release/glimpse-monitor $installdir &&
 
-sudo systemctl daemon-reload &&
+echo "[Unit]
+Description=File change monitor for Glimpse
+After=network.target
 
-sudo systemctl enable glimpse-monitor.service
-sudo systemctl start glimpse-monitor.service
+[Service]
+ExecStart=$installdir/glimpse-monitor
+Restart=always
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target
+" > glimpse-monitor.service
+
+# sudo systemctl daemon-reload &&
+#
+# sudo systemctl enable glimpse-monitor.service
+# sudo systemctl start glimpse-monitor.service
 
 echo "Installed."

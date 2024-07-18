@@ -51,8 +51,6 @@ pub fn add_document_to_corpus(idx: &mut FileIndex, document: &PathBuf) -> Option
         .alloc_string(document.to_str().unwrap().to_string());
 
     for (term, frequency) in term_frequency(&tokens) {
-        add_term(idx.terms.clone(), &term);
-
         let term_allocated = idx.tf_idf.alloc_string(term.clone());
 
         let mut list = idx.tf_idf.get(&term).unwrap_or_else(|| {
@@ -65,6 +63,10 @@ pub fn add_document_to_corpus(idx: &mut FileIndex, document: &PathBuf) -> Option
             .push_to_list(&mut list, (frequency, document_path.clone()));
 
         remove_lowest_tf_idf_for_token(20, idx.tf_idf.clone(), &term);
+
+        if frequency > 3. {
+            add_term(idx.terms.clone(), &term);
+        }
     }
 
     idx.tf_idf.increment_corpus_size();

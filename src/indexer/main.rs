@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    fs::DirEntry,
+    fs::{self, DirEntry},
     path::{Path, PathBuf},
 };
 
@@ -10,7 +10,7 @@ use lopdf::Document;
 use glimpse::{
     config::CONF,
     db::{string::DBString, string_search_db::StringSearchDb},
-    file_index::{self, set_last_indexed, tokenize_string, FileIndex},
+    file_index::{self, tokenize_string, FileIndex, IsLocked, FILE_DB_READ, FILE_DB_WRITE},
     tfidf::add_document_to_corpus,
 };
 
@@ -26,24 +26,27 @@ fn main() {
         return;
     }
 
-
     if CONF.modules.files {
-        if file_index::is_locked() {
-            println!("Lock file exists, skipping indexing.");
-            return;
-        }
-
-        file_index::lock().expect("Failed to lock file index.");
         reindex();
-        file_index::unlock();
     }
 }
 
 fn reindex() {
-    set_last_indexed();
+    let db_path = PathBuf::from(&CONF.indexing.location);
+    FileIndex::set_last_indexed(&db_path);
 
-    FileIndex::reset_all();
-    let mut idx = FileIndex::open().unwrap();
+    let temp_db_path = db_path.join("full_index_temp");
+
+    fs::remove_dir_all(&temp_db_path).unwrap_or_default();
+
+    let idx = FileIndex::open(&temp_db_path, FILE_DB_READ | FILE_DB_WRITE);
+
+    if idx.is_err() {
+        eprintln!("Failed to open index: {:?}", idx.err().unwrap());
+        return;
+    }
+
+    let mut idx = idx.unwrap();
 
     for path in &CONF.search_paths {
         let _ = index_dir(
@@ -58,6 +61,35 @@ fn reindex() {
     idx.files.save_meta();
     idx.tf_idf.save_meta();
     idx.terms.save_meta();
+
+    // close db connection
+    drop(idx);
+
+    // Copy the temp db to the main db
+
+    FileIndex::wait_for_unlock(&db_path, 60);
+
+    println!("Copying files...");
+    FileIndex::manual_lock(&db_path).unwrap();
+
+    let files = fs::read_dir(&temp_db_path).unwrap();
+    for file in files {
+        let file = file.unwrap();
+        let file_name = file.file_name();
+        let dest = db_path.join(file_name);
+
+        if dest.exists() {
+            fs::remove_file(&dest).unwrap();
+        }
+
+        fs::copy(file.path(), dest).unwrap();
+    }
+
+    unsafe {
+        FileIndex::manual_unlock(&db_path);
+    }
+
+    fs::remove_dir_all(temp_db_path).unwrap();
 }
 
 #[inline]

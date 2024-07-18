@@ -1,17 +1,23 @@
-use std::{sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc, Mutex,
-}, path::PathBuf};
+use std::{
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
+};
 
 use futures::{future::abortable, stream::AbortHandle};
-use gdk::glib::once_cell::sync::Lazy;
+use gdk::{cairo::Path, glib::once_cell::sync::Lazy};
 use gdk::{glib::idle_add_once, SeatCapabilities};
 use gtk::prelude::*;
 
 static CONTROL: AtomicBool = AtomicBool::new(false);
 
 use glimpse::{
-    biases::increment_bias, config::{CONF, CONF_FILE_PATH, CSS}, db::string_search_db::{StringSearchDb}, file_index
+    biases::increment_bias,
+    config::{CONF, CONF_FILE_PATH, CSS},
+    db::string_search_db::StringSearchDb,
+    file_index::{self, FileIndex},
 };
 use preview_window::{PreviewWindowShowing, SafeBox};
 use search_modules::{SearchModule, SearchResult};
@@ -137,7 +143,7 @@ pub fn run_app() {
             create_err_msg(error_title, err, &container);
         }
 
-        if CONF.modules.files && file_index::is_locked() {
+        if CONF.modules.files && PathBuf::from(&CONF.indexing.location).join("full_index_temp").exists() {
             println!("locked");
             let box_ = gtk::Box::new(gtk::Orientation::Vertical, 0);
             let label = gtk::Label::new(Some("ⓘ Files are currently being indexed.\nPlease wait before searching for files."));
@@ -471,6 +477,8 @@ fn perform_entry_action(row: gtk::ListBoxRow) {
             if let Some(action) = data.action.as_ref() {
                 action();
                 increment_bias(data.id, 0.5);
+
+                FileIndex::remove_all_locks();
                 std::process::exit(0);
             }
         }),
@@ -570,6 +578,7 @@ fn handle_search_field_keypress(key: gdk::keys::Key, list: Arc<Mutex<SafeListBox
 
 fn global_keypress_handler(key: gdk::keys::Key) {
     if key == gdk::keys::constants::Escape {
+        FileIndex::remove_all_locks();
         std::process::exit(0);
     }
 

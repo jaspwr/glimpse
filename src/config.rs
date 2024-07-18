@@ -170,6 +170,10 @@ pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
                 }
             }
 
+            if !PathBuf::from(&conf.indexing.location).exists() {
+                std::fs::create_dir_all(&conf.indexing.location).unwrap();
+            }
+
             Ok(conf)
         } else {
             create_new_config_file(home, config_path)
@@ -317,7 +321,7 @@ impl Default for Config {
             indexing: Indexing {
                 location: String::from(""),
                 size_upper_bound_GiB: 5.0,
-                full_reindex_after_days: 2.0,
+                full_reindex_after_days: 0.6,
             },
             modules: Modules {
                 commands: true,
@@ -343,7 +347,6 @@ impl Default for Config {
             },
             preview_window: PreviewWindow {
                 enabled: true,
-                show_automatically: true,
                 width: 420,
                 image_size: 350,
             },

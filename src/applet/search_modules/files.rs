@@ -3,7 +3,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use async_trait::async_trait;
 use glimpse::{
     config::CONF,
-    file_index::{tokenize_string, FileIndex},
+    file_index::{tokenize_string, FileIndex, FILE_DB_READ},
     prelude::*,
     tfidf::_tf_idf,
 };
@@ -304,9 +304,15 @@ impl Files {
             let mut lock = store.lock().await;
             // This lock needs to be held until we are finish with initalisation
 
-            let index = FileIndex::open().ok();
+            let db_path = PathBuf::from(&CONF.indexing.location);
+            let index = FileIndex::open(&db_path, FILE_DB_READ).ok();
 
-            *lock = index;
+            if hasnt_indexed_for_days(CONF.indexing.full_reindex_after_days) {
+                println!("reindexing files");
+                let _ = execute_detached("glimpse-indexer".to_string());
+            } else {
+                *lock = index;
+            }
 
             if let Some(benchmark) = benchmark {
                 println!("Files module loaded in {:?}", benchmark.elapsed().unwrap());
@@ -315,4 +321,13 @@ impl Files {
 
         Files { index }
     }
+}
+
+fn hasnt_indexed_for_days(days: f32) -> bool {
+    let now = chrono::Utc::now().timestamp();
+    const HOUR: f32 = 60. * 60.;
+    const DAY: f32 = HOUR * 24.;
+
+    let db_path = PathBuf::from(&CONF.indexing.location);
+    now - FileIndex::last_indexed(&db_path).unwrap_or(0) > (DAY * days) as i64
 }

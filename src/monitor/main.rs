@@ -1,5 +1,8 @@
 use fanotify::high_level::*;
-use glimpse::{config::CONF, file_index::FileIndex};
+use glimpse::{
+    config::CONF,
+    file_index::{FileIndex, FILE_DB_READ, FILE_DB_WRITE},
+};
 use nix::poll::{poll, PollFd, PollFlags};
 use std::{os::fd::AsFd, path::PathBuf};
 
@@ -95,7 +98,8 @@ fn handle_file(path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
 
     println!("File: {:?}", path);
 
-    let mut idx = FileIndex::open()?;
+    let db_path = PathBuf::from(&CONF.indexing.location);
+    let mut idx = FileIndex::open(&db_path, FILE_DB_READ | FILE_DB_WRITE)?;
 
     if path.is_dir() {
         idx.add_dir(&path);

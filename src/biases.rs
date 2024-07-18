@@ -1,7 +1,7 @@
-use crate::file_index;
+use crate::{config::CONF, file_index};
 use once_cell::sync::Lazy;
 use savefile_derive::Savefile;
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 
 pub static BIASES: Lazy<Biases> = Lazy::new(|| Biases::load("biases"));
 
@@ -18,7 +18,11 @@ impl Biases {
     }
 
     pub fn load(name: &str) -> Biases {
-        match std::fs::File::open(file_index::PATH.join(name).with_extension("bin")) {
+        match std::fs::File::open(
+            PathBuf::from(&CONF.indexing.location)
+                .join(name)
+                .with_extension("bin"),
+        ) {
             Ok(mut file) => match savefile::load(&mut file, 0) {
                 Ok(biases) => biases,
                 Err(_) => Biases::new(),
@@ -28,7 +32,9 @@ impl Biases {
     }
 
     pub fn save(&self, name: &str) {
-        let path = file_index::PATH.join(name).with_extension("bin");
+        let path = PathBuf::from(&CONF.indexing.location)
+            .join(name)
+            .with_extension("bin");
         let mut file = std::fs::File::create(path).unwrap();
         savefile::save(&mut file, 0, self).unwrap();
     }
