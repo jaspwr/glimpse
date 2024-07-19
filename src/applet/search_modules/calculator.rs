@@ -240,16 +240,156 @@ fn execute(tokens: Vec<Token>) -> Option<f64> {
     let (ts, n) = parse(tokens)?;
 
     if ts.is_empty() {
-        Some(n.unwrap())
+        Some(n)
     } else {
         None
     }
 }
 
 type Tokens = Vec<Token>;
+type Value = f64;
 
 fn parse(ts: Tokens) -> Option<(Tokens, Value)> {
-    test(ts)
+    add(ts)
+}
+
+fn add(ts: Tokens) -> Option<(Tokens, Value)> {
+    let (ts, lhs) = mul(ts)?;
+
+    add_(lhs, ts)
+}
+
+fn add_(lhs: Value, ts: Tokens) -> Option<(Tokens, Value)> {
+    if let Some(Token::Operator('+')) = peek(&ts) {
+        let (ts, rhs) = mul(ts[1..].to_vec())?;
+
+        let this_oper_res = lhs + rhs;
+
+        if let Some(r) = add_(this_oper_res, ts.clone()) {
+            return Some(r);
+        }
+
+        Some((ts, this_oper_res))
+    } else if let Some(Token::Operator('-')) = peek(&ts) {
+        let (ts, rhs) = mul(ts[1..].to_vec())?;
+
+        let this_oper_res = lhs - rhs;
+
+        if let Some(r) = add_(this_oper_res, ts.clone()) {
+            return Some(r);
+        }
+
+        Some((ts, this_oper_res))
+    } else {
+        Some((ts, lhs))
+    }
+}
+
+fn mul(ts: Tokens) -> Option<(Tokens, Value)> {
+    let (ts, lhs) = unary_minus(ts)?;
+
+    mul_(lhs, ts)
+}
+
+fn mul_(lhs: Value, ts: Tokens) -> Option<(Tokens, Value)> {
+    if let Some(Token::Operator('*')) = peek(&ts) {
+        let (ts, rhs) = unary_minus(ts[1..].to_vec())?;
+
+        let this_oper_res = lhs * rhs;
+
+        if let Some(r) = mul_(this_oper_res, ts.clone()) {
+            return Some(r);
+        }
+
+        Some((ts, this_oper_res))
+    } else if let Some(Token::Operator('/')) = peek(&ts) {
+        let (ts, rhs) = unary_minus(ts[1..].to_vec())?;
+
+        let this_oper_res = lhs / rhs;
+
+        if let Some(r) = mul_(this_oper_res, ts.clone()) {
+            return Some(r);
+        }
+
+        Some((ts, this_oper_res))
+    } else {
+        Some((ts, lhs))
+    }
+}
+
+fn unary_minus(ts: Tokens) -> Option<(Tokens, Value)> {
+    if let Some(Token::Operator('-')) = peek(&ts) {
+        let (ts, n) = pow(ts[1..].to_vec())?;
+        Some((ts, -n))
+    } else {
+        pow(ts)
+    }
+}
+
+fn pow(ts: Tokens) -> Option<(Tokens, Value)> {
+    let (ts, lhs) = brackets(ts)?;
+
+    pow_(lhs, ts)
+}
+
+fn pow_(lhs: Value, ts: Tokens) -> Option<(Tokens, Value)> {
+    if let Some(Token::Operator('^')) = peek(&ts) {
+        let (ts, rhs) = brackets(ts[1..].to_vec())?;
+
+        let this_oper_res = lhs.powf(rhs);
+
+        if let Some(r) = pow_(this_oper_res, ts.clone()) {
+            return Some(r);
+        }
+
+        Some((ts, this_oper_res))
+    } else {
+        Some((ts, lhs))
+    }
+}
+
+fn brackets(ts: Tokens) -> Option<(Tokens, Value)> {
+    if let Some(Token::Paren('(')) = peek(&ts) {
+        let (ts, n) = parse(ts[1..].to_vec())?;
+
+        try_consume(&ts, Token::Paren(')')).map(|ts| (ts, n))
+    } else {
+        function(ts)
+    }
+}
+
+fn function(ts: Tokens) -> Option<(Tokens, Value)> {
+    if let Some(Token::Function(name)) = peek(&ts) {
+        let (ts, n) = brackets(ts[1..].to_vec())?;
+
+        run_fn(&name, n).map(|n| (ts, n))
+    } else {
+        dice_roll(ts)
+    }
+}
+
+fn dice_roll(ts: Tokens) -> Option<(Tokens, Value)> {
+    let (ts, lhs) = literal(ts)?;
+
+    if let Some(Token::Operator('d')) = peek(&ts) {
+        let (ts, dice_sides) = literal(ts[1..].to_vec())?;
+
+        roll(lhs, dice_sides).map(|n| (ts, n))
+    } else {
+        Some((ts, lhs))
+    }
+}
+
+fn literal(ts: Tokens) -> Option<(Tokens, Value)> {
+    if let Some(Token::Number(n)) = ts.first() {
+        Some((ts[1..].to_vec(), *n))
+    } else {
+        None
+    }
+}
+
+fn peek(ts: &Tokens) -> Option<&Token> {
+    ts.iter().next()
 }
 
 fn try_consume(ts: &Tokens, matching: Token) -> Option<Tokens> {
@@ -257,141 +397,6 @@ fn try_consume(ts: &Tokens, matching: Token) -> Option<Tokens> {
         Some(ts[1..].to_vec())
     } else {
         None
-    }
-}
-
-#[derive(PartialEq)]
-enum Value {
-    Number(f64),
-    Epsilon,
-}
-
-impl Value {
-    fn wrap(n: f64) -> Value {
-        Value::Number(n)
-    }
-
-    fn unwrap(self) -> f64 {
-        match self {
-            Value::Number(n) => n,
-            Value::Epsilon => panic!("Fatal calculator parse error. Unwrapped epsilon."),
-        }
-    }
-}
-
-type PartialExpr = Option<(Tokens, Value)>;
-type ParserNode = fn(Tokens) -> PartialExpr;
-type Operation = fn(f64, f64) -> f64;
-
-fn first(
-    l_node: ParserNode,
-    r_node: ParserNode,
-    operation: Operation,
-) -> impl Fn(Tokens) -> PartialExpr {
-    move |ts| {
-        let (ts, left) = l_node(ts)?;
-        let (ts, right) = r_node(ts)?;
-
-        match (left, right) {
-            (Value::Number(left), Value::Number(right)) => {
-                Some((ts, Value::wrap(operation(left, right))))
-            }
-            (Value::Number(left), Value::Epsilon) => Some((ts, Value::wrap(left))),
-            _ => None,
-        }
-    }
-}
-
-fn follow(first: ParserNode, operator: Token) -> impl Fn(Tokens) -> PartialExpr {
-    move |ts| {
-        let operator = operator.clone();
-        match try_consume(&ts, operator) {
-            Some(ts) => first(ts),
-            None => Some((ts, Value::Epsilon)),
-        }
-    }
-}
-
-fn test(ts: Tokens) -> PartialExpr {
-    first(add, test_, |l, r| if l == r { 1. } else { 0. })(ts)
-}
-
-fn test_(ts: Tokens) -> PartialExpr {
-    follow(test, Token::Operator('='))(ts)
-}
-
-fn add(ts: Tokens) -> PartialExpr {
-    first(sub, add_, |l, r| l + r)(ts)
-}
-
-fn add_(ts: Tokens) -> PartialExpr {
-    follow(add, Token::Operator('+'))(ts)
-}
-
-fn sub(ts: Tokens) -> PartialExpr {
-    first(mul, sub_, |l, r| l - r)(ts)
-}
-
-fn sub_(ts: Tokens) -> PartialExpr {
-    follow(sub, Token::Operator('-'))(ts)
-}
-
-fn mul(ts: Tokens) -> PartialExpr {
-    first(div, mul_, |l, r| l * r)(ts)
-}
-
-fn mul_(ts: Tokens) -> PartialExpr {
-    follow(mul, Token::Operator('*'))(ts)
-}
-
-fn div(ts: Tokens) -> PartialExpr {
-    first(pow, div_, |l, r| l / r)(ts)
-}
-
-fn div_(ts: Tokens) -> PartialExpr {
-    follow(div, Token::Operator('/'))(ts)
-}
-
-fn pow(ts: Tokens) -> PartialExpr {
-    first(dice_roll, pow_, |l, r| l.powf(r))(ts)
-}
-
-fn pow_(ts: Tokens) -> PartialExpr {
-    follow(pow, Token::Operator('^'))(ts)
-}
-
-#[rustfmt::skip]
-fn call(ts: Tokens) -> PartialExpr {
-    let first_token = ts.first()?;
-    if let Token::Function(name) = first_token {
-        let ts = ts[1..].to_vec();
-        let (ts, n) = brack(ts)?;
-
-        let n = n.unwrap(); // brack never returns epsilon
-        let n = run_fn(name, n)?;
-        Some((ts, Value::wrap(n)))
-    } else {
-        brack(ts)
-    }
-}
-
-fn dice_roll(ts: Tokens) -> PartialExpr {
-    let (ts, left) = call(ts)?;
-    let (ts, right) = dice_roll_(ts)?;
-
-    match (left, right) {
-        (Value::Number(left), Value::Number(right)) => Some((ts, Value::wrap(roll(left, right)?))),
-        (Value::Number(left), Value::Epsilon) => Some((ts, Value::wrap(left))),
-        _ => None,
-    }
-}
-
-fn dice_roll_(ts: Tokens) -> PartialExpr {
-    let operator = Token::Operator('d');
-
-    match try_consume(&ts, operator) {
-        Some(ts) => dice_roll(ts),
-        None => Some((ts, Value::Epsilon)),
     }
 }
 
@@ -407,36 +412,6 @@ fn roll(dice_count: f64, dice_sides: f64) -> Option<f64> {
         .map(|n| n.ceil())
         .sum::<f64>()
         .into()
-}
-
-#[rustfmt::skip]
-fn brack(ts: Tokens) -> PartialExpr {
-    match try_consume(&ts, Token::Paren('(')) {
-        Some(ts) => parse(ts)
-            .and_then(|(ts, left)|
-                try_consume(&ts, Token::Paren(')')).map(|ts| (ts, left))),
-        None => unary_minus(ts)
-    }
-}
-
-fn unary_minus(ts: Tokens) -> PartialExpr {
-    let operator = Token::Operator('-');
-
-    match try_consume(&ts, operator) {
-        Some(ts) => {
-            let (ts, n) = literal(ts)?;
-            Some((ts, Value::wrap(-n.unwrap())))
-        }
-        None => literal(ts),
-    }
-}
-
-fn literal(ts: Tokens) -> PartialExpr {
-    if let Some(Token::Number(n)) = ts.first() {
-        Some((ts[1..].to_vec(), Value::wrap(*n)))
-    } else {
-        None
-    }
 }
 
 fn run_fn(name: &str, n: f64) -> Option<f64> {
@@ -488,5 +463,7 @@ mod tests {
         assert_eq!(exec("15*5 - 6 - 20 "), Some("49".to_string()));
         assert_eq!(exec("-5*5 + 6"), Some("-19".to_string()));
         assert_eq!(exec("-(-15*5 + 6 + 20)"), Some("49".to_string()));
+        assert_eq!(exec("-(-15*5 + 6 + 20) ^ 4"), Some("-5.765e6".to_string()));
+        assert_eq!(exec("(-15*5 + 6) ^ (sin pi)"), Some("1".to_string()));
     }
 }
