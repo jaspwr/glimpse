@@ -24,7 +24,7 @@ impl DBSession {
             true
         });
 
-        let created_new_file = create_file_if_inexistent(&path);
+        let _ = create_file_if_inexistent(&path);
 
         let file = OpenOptions::new()
             .read(true)
@@ -39,7 +39,6 @@ impl DBSession {
         let meta = if meta_path.try_exists().unwrap() {
             Meta::load(&meta_path)
         } else {
-            // assert!(created_new_file);
             let new_meta = Meta::new(&meta_path);
             new_meta.save();
             new_meta
@@ -198,16 +197,16 @@ mod tests {
         let meta = Meta::load(&meta_path);
         // assert_eq!(meta.chunk_descriptors.len(), 0);
 
-        let chunk = DBChunkDescriptor {
-            start: Address(0),
-            length: BytesLength(1024),
-            allocated: true,
-        };
+        // let chunk = DBChunkDescriptor {
+        //     start: Address(0),
+        //     length: BytesLength(1024),
+        //     allocated: true,
+        // };
 
         // meta.chunk_descriptors.push(chunk);
         meta.save();
 
-        let meta = Meta::load(&meta_path);
+        // let meta = Meta::load(&meta_path);
 
         // assert_eq!(meta.chunk_descriptors[0].length, BytesLength(1024));
 

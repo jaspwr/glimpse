@@ -221,7 +221,7 @@ impl DBSession {
         }
     }
 
-    fn free(&mut self, chunk: DBChunkDescriptor) {
+    fn free(&mut self, _chunk: DBChunkDescriptor) {
         // self.meta
         //     .chunk_descriptors
         //     .iter_mut()
@@ -275,22 +275,22 @@ impl DBSession {
     }
 }
 
-fn overlapping_chunks(chunks: &Vec<DBChunkDescriptor>) -> bool {
-    for (i, chunk_i) in chunks.iter().enumerate() {
-        for (j, chunk_j) in chunks.iter().enumerate() {
-            if i == j {
-                continue;
-            }
-
-            if chunk_j.start >= chunk_i.start
-                && chunk_j.start < chunk_i.start.offset(chunk_i.length)
-            {
-                return true;
-            }
-        }
-    }
-    false
-}
+// fn overlapping_chunks(chunks: &Vec<DBChunkDescriptor>) -> bool {
+//     for (i, chunk_i) in chunks.iter().enumerate() {
+//         for (j, chunk_j) in chunks.iter().enumerate() {
+//             if i == j {
+//                 continue;
+//             }
+//
+//             if chunk_j.start >= chunk_i.start
+//                 && chunk_j.start < chunk_i.start.offset(chunk_i.length)
+//             {
+//                 return true;
+//             }
+//         }
+//     }
+//     false
+// }
 
 #[cfg(test)]
 mod tests {

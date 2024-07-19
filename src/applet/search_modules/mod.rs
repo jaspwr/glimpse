@@ -21,6 +21,8 @@ pub trait SearchModule {
     fn name(&self) -> String {
         std::any::type_name::<Self>().to_string()
     }
+
+    #[allow(unused)]
     fn uid(&self) -> u64 {
         crate::utils::simple_hash(&self.name())
     }

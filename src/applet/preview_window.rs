@@ -28,7 +28,7 @@ pub enum PreviewWindowShowing {
 #[derive(Debug, Clone)]
 pub enum PreviewWindowContents {
     Image(PathBuf),
-    TextFile(String, PathBuf),
+    TextFile(String),
     Directory(PathBuf),
 }
 
@@ -83,7 +83,7 @@ fn create_file_preview_widget(
 
     container.container.add(&match prev {
         PreviewWindowContents::Image(path) => load_image(&path)?,
-        PreviewWindowContents::TextFile(text, _) => plain_text_preview(text),
+        PreviewWindowContents::TextFile(text) => plain_text_preview(text),
         PreviewWindowContents::Directory(path) => dir_listing(&path),
     });
 
@@ -192,7 +192,7 @@ async fn create_plain_text_file_preview(path: &PathBuf) -> Option<PreviewWindowC
 
     let text = text.trunc(7000);
 
-    Some(PreviewWindowContents::TextFile(text, path.clone()))
+    Some(PreviewWindowContents::TextFile(text))
 }
 
 fn plain_text_preview(text: String) -> gtk::Box {

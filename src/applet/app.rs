@@ -583,20 +583,6 @@ fn global_keypress_handler(key: gdk::keys::Key) {
         FileIndex::remove_all_locks();
         std::process::exit(0);
     }
-
-    // if CONF.preview_window.enabled
-    //     && !CONF.preview_window.show_automatically
-    //     && key == to_gdk_key(&CONF.preview_window.show_on_key)
-    // {
-    // }
-}
-
-fn to_gdk_key(str_name: &String) -> gdk::keys::Key {
-    // TODO: Do this a better way.
-    match str_name.as_str() {
-        "Tab" => gdk::keys::constants::Tab,
-        _ => gdk::keys::constants::Tab,
-    }
 }
 
 fn handle_list_keypress(key: gdk::keys::Key, search_field: Arc<gtk::Entry>, list: &gtk::ListBox) {

@@ -34,7 +34,7 @@ struct FileResult {
 
 #[async_trait]
 impl SearchModule for Files {
-    async fn search(&self, query: String, max_results: u32) -> Vec<SearchResult> {
+    async fn search(&self, query: String, _: u32) -> Vec<SearchResult> {
         if query.is_empty() {
             return vec![];
         }
@@ -115,18 +115,19 @@ impl SearchModule for Files {
                 });
             }
 
-            files
+
+            merge_results(files
                 .into_iter()
                 .filter(|(s, _)| PathBuf::from(s).exists())
                 .map(|(s, res)| self.create_result(&s, res.relevance / 2., res.kind, hash_fn(&s)))
-                .collect::<Vec<SearchResult>>()
+                .collect::<Vec<SearchResult>>())
         } else {
             vec![]
         }
     }
 }
 
-fn merge_results(results: &mut Vec<SearchResult>) {
+fn merge_results(mut results: Vec<SearchResult>) -> Vec<SearchResult> {
     let mut relevances: HashMap<SearchResultId, Relevance> = HashMap::new();
     for result in results.iter_mut() {
         match relevances.get(&result.id) {
@@ -142,20 +143,14 @@ fn merge_results(results: &mut Vec<SearchResult>) {
 
     results.dedup_by(|a, b| a.id == b.id);
 
-    for results in results {
+    for results in results.iter_mut() {
         results.relevance = *relevances.get(&results.id).unwrap_or(&0.0);
     }
+
+    results
 }
 
 impl Files {
-    fn handle_tf_idf_result(&self, s: &PathBuf, relevance: &f32, id: u64) -> SearchResult {
-        let s = s.to_str().unwrap().to_string();
-
-        let relevance = clamp_relevance(relevance);
-
-        self.create_result(&s, relevance, FileType::File, id)
-    }
-
     fn create_result(
         &self,
         name: &String,
@@ -217,15 +212,6 @@ impl Files {
             )),
         }
     }
-}
-
-#[inline]
-fn clamp_relevance(relevance: &f32) -> f32 {
-    let mut relevance = *relevance;
-    if relevance > 3.0 {
-        relevance = 3.0;
-    }
-    relevance
 }
 
 fn is_windows_application(path: &String) -> bool {

@@ -84,7 +84,7 @@ impl FileIndex {
 
     pub fn open(
         path: &PathBuf,
-        access_flags: i32,
+        _access_flags: i32,
     ) -> Result<FileIndex, Box<dyn std::error::Error>> {
         if !path.exists() {
             std::fs::create_dir_all(path).unwrap();

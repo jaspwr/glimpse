@@ -1,4 +1,3 @@
-use std::borrow::BorrowMut;
 use std::hash::Hash;
 use std::{
     path::PathBuf,
@@ -24,16 +23,16 @@ where
     corpus_size: SerializableDBPointer<usize>,
 }
 
-impl<K_in_db, V> HashMapDB<K_in_db, V>
+impl<KInDb, V> HashMapDB<KInDb, V>
 where
-    K_in_db: Clone + HashWithDBAccess + EqWithDBAccess,
+    KInDb: Clone + HashWithDBAccess + EqWithDBAccess,
     V: Clone,
 {
     pub fn open(path: PathBuf, buckets_count: usize) -> Self {
         let mut db = DBSession::open(path);
 
         let (map, corpus_size) = if db.meta.pointer_store.len() == 2 {
-            let map_ptr = db.meta.pointer_store[0].to_ptr::<DBHashMap<K_in_db, V>>();
+            let map_ptr = db.meta.pointer_store[0].to_ptr::<DBHashMap<KInDb, V>>();
             let map_borrowed = db.borrow_mut(&map_ptr);
             assert!(map_borrowed.len() == 1);
             let map = (*map_borrowed[0]).clone();
@@ -43,7 +42,7 @@ where
             (map, corpus_size)
         } else {
             assert!(db.meta.pointer_store.is_empty());
-            let map = DBHashMap::<K_in_db, V>::new(&mut db, buckets_count);
+            let map = DBHashMap::<KInDb, V>::new(&mut db, buckets_count);
             let map_alloc = db.alloc(vec![map.clone()]);
             db.meta
                 .pointer_store
@@ -66,14 +65,14 @@ where
         }
     }
 
-    pub fn insert(&mut self, key: K_in_db, value: V) {
+    pub fn insert(&mut self, key: KInDb, value: V) {
         let mut db = self.db.lock().unwrap();
         self.map.insert(&mut db, key, value);
     }
 
-    pub fn get<K_lookup>(&mut self, key: K_lookup) -> Option<V>
+    pub fn get<KLookup>(&mut self, key: KLookup) -> Option<V>
     where
-        K_lookup: CompareWith<K_in_db> + Hash,
+        KLookup: CompareWith<KInDb> + Hash,
     {
         let mut db = self.db.lock().unwrap();
         self.map.get(&mut db, key)

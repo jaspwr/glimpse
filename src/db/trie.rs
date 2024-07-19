@@ -256,13 +256,6 @@ fn fuzzy_get(
     node.fuzzy_get(db, rest, matches);
 }
 
-fn allocate_string(db: &mut DBSession, points_to: &str) -> SerializableDBPointer<DBString> {
-    let points_to = DBString::new(db, points_to.to_string());
-    let points_to = db.alloc(vec![points_to]);
-
-    points_to.to_serializable()
-}
-
 #[cfg(test)]
 mod tests {
     use std::{fs, path::PathBuf};

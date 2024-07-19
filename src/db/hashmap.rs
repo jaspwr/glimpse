@@ -64,20 +64,20 @@ impl<K: Clone, V: Clone> From<KeyValuePair<K, V>> for (K, V) {
     }
 }
 
-impl<K_in_db, V> DBHashMap<K_in_db, V>
+impl<KInDb, V> DBHashMap<KInDb, V>
 where
-    K_in_db: Clone + EqWithDBAccess + HashWithDBAccess,
+    KInDb: Clone + EqWithDBAccess + HashWithDBAccess,
     V: Clone,
 {
     pub fn new(db: &mut DBSession, buckets_count: usize) -> Self {
         let buckets = (0..buckets_count)
-            .map(|_| DBList::<KeyValuePair<K_in_db, V>>::new(db))
+            .map(|_| DBList::<KeyValuePair<KInDb, V>>::new(db))
             .collect::<Vec<_>>();
 
         let buckets = db.alloc(buckets);
         let buckets = buckets.to_serializable();
 
-        let map = __DBHashMap::<K_in_db, V> {
+        let map = __DBHashMap::<KInDb, V> {
             buckets,
             buckets_count,
             length: 0,
@@ -87,19 +87,19 @@ where
         let inner = db.alloc(vec![map]);
         let inner = inner.to_serializable();
 
-        DBHashMap::<K_in_db, V> { inner }
+        DBHashMap::<KInDb, V> { inner }
     }
 
-    pub fn get<'a, kLookup>(&'a mut self, db: &'a mut DBSession, key: kLookup) -> Option<V>
+    pub fn get<'a, KLookup>(&'a mut self, db: &'a mut DBSession, key: KLookup) -> Option<V>
     where
-        kLookup: Hash + CompareWith<K_in_db>,
+        KLookup: Hash + CompareWith<KInDb>,
     {
         let bucket = self.get_bucket(db, &key);
 
         // Ideally this would not have to be stored in a vector but
         // `db` needs to be borrowed again. Hopefully this gets optimised
         // out.
-        let key_value_pairs = bucket.iter(db).collect::<Vec<KeyValuePair<K_in_db, V>>>();
+        let key_value_pairs = bucket.iter(db).collect::<Vec<KeyValuePair<KInDb, V>>>();
 
         for kvp in key_value_pairs {
             let (k, v) = kvp.into();
@@ -111,16 +111,16 @@ where
         None
     }
 
-    pub fn insert(&mut self, db: &mut DBSession, key: K_in_db, value: V) {
+    pub fn insert(&mut self, db: &mut DBSession, key: KInDb, value: V) {
         let mut bucket = self.get_bucket(db, &key);
 
-        bucket.remove(db, |kvp: &KeyValuePair<K_in_db, V>, db: &mut DBSession| {
+        bucket.remove(db, |kvp: &KeyValuePair<KInDb, V>, db: &mut DBSession| {
             key.eq(&kvp.key, db)
         });
         bucket.push(db, (key, value).into());
     }
 
-    fn get_bucket<KHashable>(&mut self, db: &mut DBSession, key: &KHashable) -> Bucket<K_in_db, V>
+    fn get_bucket<KHashable>(&mut self, db: &mut DBSession, key: &KHashable) -> Bucket<KInDb, V>
     where
         KHashable: HashWithDBAccess,
     {
@@ -156,7 +156,7 @@ where
         map.length
     }
 
-    pub fn flatten(&self, db: &mut DBSession) -> Vec<(K_in_db, V)> {
+    pub fn flatten(&self, db: &mut DBSession) -> Vec<(KInDb, V)> {
         let ptr = self.inner.to_ptr();
         let borrow = db.borrow_mut(&ptr);
         assert!(borrow.len() == 1);
@@ -170,7 +170,7 @@ where
 
         let mut items = vec![];
 
-        let buckets: Vec<Bucket<K_in_db, V>> = (0..bucket_count)
+        let buckets: Vec<Bucket<KInDb, V>> = (0..bucket_count)
             .map(|bucket_index| buckets[bucket_index].clone())
             .collect();
 
@@ -183,7 +183,7 @@ where
         items
     }
 
-    pub fn into_iter(&self, db: &mut DBSession) -> <Vec<(K_in_db, V)> as IntoIterator>::IntoIter {
+    pub fn into_iter(&self, db: &mut DBSession) -> <Vec<(KInDb, V)> as IntoIterator>::IntoIter {
         self.flatten(db).into_iter()
     }
 }

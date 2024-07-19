@@ -187,8 +187,6 @@ pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
 }
 
 fn find_user_config() -> Result<PathBuf, Box<dyn Error>> {
-    let mut config_path = PathBuf::from("/home");
-
     for entry in fs::read_dir("/home")? {
         let entry = entry?;
         let path = entry.path();
@@ -200,7 +198,7 @@ fn find_user_config() -> Result<PathBuf, Box<dyn Error>> {
                 continue;
             }
 
-            config_path = PathBuf::from("/home")
+            let config_path = PathBuf::from("/home")
                 .join(path)
                 .join(".config")
                 .join("glimpse")
