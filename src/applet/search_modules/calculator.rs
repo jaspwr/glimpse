@@ -362,7 +362,7 @@ fn function(ts: Tokens) -> Option<(Tokens, Value)> {
     if let Some(Token::Function(name)) = peek(&ts) {
         let (ts, n) = brackets(ts[1..].to_vec())?;
 
-        run_fn(&name, n).map(|n| (ts, n))
+        run_fn(name, n).map(|n| (ts, n))
     } else {
         dice_roll(ts)
     }

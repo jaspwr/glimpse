@@ -1,4 +1,3 @@
-# This project is unfinished.
 # glimpse
 A simple GTK3 launcher/finder utility for GNU/Linux. Current features include searching for applications, directories, files by name and contents using TF-IDF, chromium and firefox bookmarks, dictionary definitions, steam games and evaluates mathematical expressions.
 
@@ -37,4 +36,3 @@ After running for the first time, a configuration file should be created at `~/.
 ### Make
 * Rust & Cargo
 * Git
-* Bash
