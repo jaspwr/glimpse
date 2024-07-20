@@ -56,3 +56,14 @@ scrollbar slider {
     background-color: #fff;
     border: none;
 }
+
+.preview-text {
+    padding: 3px;
+    background-color: #f4dbd6;
+    border-radius: 10px;
+}
+
+.preview-window {
+    background-color: #f0c6c6;
+    border-radius: 10px;
+}

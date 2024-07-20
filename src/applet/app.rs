@@ -171,7 +171,6 @@ pub fn run_app() {
         }
 
         .preview-text {
-            background-color: rgba(0,0,0,.1);
             font-family: monospace, monospace;
             font-size: 12px;
         }
