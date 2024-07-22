@@ -22,6 +22,9 @@ $ git clone https://github.com/jaspwr/glimpse
 $ cd glimpse
 $ bash install.sh
 ```
+### Packages
+ * AUR: [![AUR Version](https://img.shields.io/aur/version/glimpse-git)](https://aur.archlinux.org/packages/glimpse-git) 
+
 
 ## Configuration
 After running for the first time, a configuration file should be created at `~/.config/glimpse/config.toml` and a stylesheet at `~/.config/glimpse/styles.css`.
