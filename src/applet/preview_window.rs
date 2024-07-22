@@ -1,4 +1,4 @@
-// Glimpse - GNU/Linux Launcher and File search utility.
+// Glimpse - GNU/Linux launcher and file search utility.
 // Copyright (C) 2024 https://github.com/jaspwr
 
 // This program is free software: you can redistribute it and/or modify
