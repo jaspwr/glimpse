@@ -38,11 +38,13 @@ pub struct Files {
     index: Arc<tokio::sync::Mutex<Option<FileIndex>>>,
 }
 
+#[derive(Debug)]
 enum FileType {
     File,
     Dir,
 }
 
+#[derive(Debug)]
 struct FileResult {
     relevance: f32,
     kind: FileType,
@@ -50,12 +52,12 @@ struct FileResult {
 
 #[async_trait]
 impl SearchModule for Files {
-    async fn search(&self, query: String, _: u32) -> Vec<SearchResult> {
+    async fn search(&self, mut query: String, _: u32) -> Vec<SearchResult> {
         if query.is_empty() {
             return vec![];
         }
 
-        // tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+        query = query.to_lowercase();
 
         let mut index = self.index.lock().await;
 
@@ -99,10 +101,26 @@ impl SearchModule for Files {
                 .into_iter()
                 .for_each(|(s, r)| push(&mut files, &s, r * 1.4, FileType::File));
 
-            if CONF.search_file_contents {
-                let mut tokens = tokenize_string(&query);
-                tokens.dedup();
+            let mut tokens = tokenize_string(&query);
+            tokens.dedup();
 
+            if tokens.len() > 1 {
+                for token in &tokens {
+                    index
+                        .dirs
+                        .get(token, &hash_fn)
+                        .into_iter()
+                        .for_each(|(s, r)| push(&mut files, &s, r * 1.5, FileType::Dir));
+
+                    index
+                        .files
+                        .get(token, &hash_fn)
+                        .into_iter()
+                        .for_each(|(s, r)| push(&mut files, &s, r * 1.4, FileType::File));
+                }
+            }
+
+            if CONF.search_file_contents {
                 let corpus_size = index.tf_idf.corpus_size();
 
                 tokens.into_iter().for_each(|token| {
@@ -131,12 +149,15 @@ impl SearchModule for Files {
                 });
             }
 
-
-            merge_results(files
-                .into_iter()
-                .filter(|(s, _)| PathBuf::from(s).exists())
-                .map(|(s, res)| self.create_result(&s, res.relevance / 2., res.kind, hash_fn(&s)))
-                .collect::<Vec<SearchResult>>())
+            merge_results(
+                files
+                    .into_iter()
+                    .filter(|(s, _)| PathBuf::from(s).exists())
+                    .map(|(s, res)| {
+                        self.create_result(&s, res.relevance / 2., res.kind, hash_fn(&s))
+                    })
+                    .collect::<Vec<SearchResult>>(),
+            )
         } else {
             vec![]
         }
