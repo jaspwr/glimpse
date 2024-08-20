@@ -111,7 +111,7 @@ impl SearchModule for Commands {
         if let Some(apps) = lock.as_ref() {
             string_search(&query, apps, max_results, &hash_fn, true)
                 .into_iter()
-                .map(|(s, r)| self.create_result(s, r + 0.3))
+                .map(|(s, r)| self.create_result(s, r * 1.4 + 0.3))
                 .collect()
         } else {
             vec![]

@@ -1,2 +1,2 @@
-# 1.0.1
-* Remove unneeded CSS class.
+# 1.0.2
+* Fix file searching with multiple tokens in query.
