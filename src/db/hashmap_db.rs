@@ -53,7 +53,7 @@ where
             assert!(map_borrowed.len() == 1);
             let map = (*map_borrowed[0]).clone();
 
-            let corpus_size = db.meta.pointer_store[1].to_ptr::<usize>().to_serializable();
+            let corpus_size = db.meta.pointer_store[1].to_ptr::<usize>().into_serializable();
 
             (map, corpus_size)
         } else {
@@ -64,7 +64,7 @@ where
                 .pointer_store
                 .push(SaveableDBPointer::from_ptr(map_alloc));
 
-            let corpus_size = db.alloc(vec![0]).to_serializable();
+            let corpus_size = db.alloc(vec![0]).into_serializable();
 
             db.meta
                 .pointer_store

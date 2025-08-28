@@ -78,7 +78,7 @@ pub struct DBPointer<T> {
 }
 
 impl<T> DBPointer<T> {
-    pub fn to_serializable(self) -> SerializableDBPointer<T> {
+    pub fn into_serializable(self) -> SerializableDBPointer<T> {
         SerializableDBPointer {
             is_null: self.is_null,
             chunk: self.chunk,
@@ -276,7 +276,7 @@ impl DBSession {
             self.capacity
         );
 
-        assert!(position.0 % std::mem::align_of::<T>() == 0);
+        assert!(position.0.is_multiple_of(std::mem::align_of::<T>()));
 
         (0..amount.0)
             .map(|i| {
@@ -310,16 +310,16 @@ impl DBSession {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, path::PathBuf};
+    use std::{fs, path::{Path, PathBuf}};
 
     use crate::db::{
         allocator::{Address, ArrayLength, BytesLength},
         session::{meta_path, DBSession},
     };
 
-    fn remove_if_exists(path: &PathBuf) {
+    fn remove_if_exists(path: &Path) {
         if path.try_exists().unwrap() {
-            fs::remove_file(path.clone()).unwrap();
+            fs::remove_file(path).unwrap();
         }
     }
 

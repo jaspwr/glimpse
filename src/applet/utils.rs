@@ -70,9 +70,9 @@ pub fn needs_reindex() -> bool {
     now - FileIndex::last_indexed(&db_path).unwrap_or(0) > (DAY * days) as i64
 }
 
-pub fn is_cli_app(name: &String) -> bool {
+pub fn is_cli_app(name: &str) -> bool {
     matches!(
-        name.as_str(),
+        name,
         "ls" | "cd"
             | "cat"
             | "rm"

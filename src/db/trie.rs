@@ -37,7 +37,7 @@ impl DBTrie {
         let root = DBTrieNode::new(db);
         let root = db.alloc(vec![root]);
         Self {
-            root: root.to_serializable(),
+            root: root.into_serializable(),
         }
     }
 
@@ -116,7 +116,7 @@ impl DBTrieNode {
     pub fn new(db: &mut DBSession) -> Self {
         let child_map = DBHashMap::new(db, 1);
         let child_map = db.alloc(vec![child_map]);
-        let child_map = child_map.to_serializable();
+        let child_map = child_map.into_serializable();
 
         Self {
             points_to: DBList::new(db),
@@ -156,7 +156,7 @@ impl DBTrieNode {
                 new_node.insert(db, rest, points_to);
 
                 let new_node = db.alloc(vec![new_node]);
-                let new_node = new_node.to_serializable();
+                let new_node = new_node.into_serializable();
 
                 children.insert(db, c, new_node);
             }
@@ -201,7 +201,7 @@ impl DBTrieNode {
                 // There were no nodes for the current char.
 
                 if children.len(db) < 4 {
-                    for (_, child) in children.into_iter(db) {
+                    for (_, child) in children.iter(db) {
                         fuzzy_get(child, db, matches, rest)
                     }
                 }

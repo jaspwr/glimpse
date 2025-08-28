@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::fs;
+use std::{borrow::Cow, fs};
 
 use gdk::gdk_pixbuf;
 use glimpse::config::CONF;
@@ -27,23 +27,19 @@ pub fn from_file(path: &String) -> Option<gtk::Image> {
         return None;
     }
 
-    let file = std::fs::File::open(path.clone());
-    if file.is_ok() {
-        let pixbuf = gdk_pixbuf::Pixbuf::from_file(path).unwrap();
-        let pixbuf = pixbuf
-            .scale_simple(
-                CONF.visual.icon_size as i32,
-                CONF.visual.icon_size as i32,
-                gdk_pixbuf::InterpType::Bilinear,
-            )
-            .unwrap();
-        return Some(gtk::Image::from_pixbuf(Some(&pixbuf)));
-    }
-    None
+    let pixbuf = gdk_pixbuf::Pixbuf::from_file(path).ok()?;
+    let pixbuf = pixbuf
+        .scale_simple(
+            CONF.visual.icon_size as i32,
+            CONF.visual.icon_size as i32,
+            gdk_pixbuf::InterpType::Bilinear,
+        )
+        .unwrap();
+    Some(gtk::Image::from_pixbuf(Some(&pixbuf)))
 }
 
-pub fn find_application_icon(name: &String) -> Option<gtk::Image> {
-    let mut icon = __find_application_icon(name);
+pub fn find_application_icon(name: &str) -> Option<gtk::Image> {
+    let mut icon = find_application_icon_inner(name);
 
     if icon.is_none() {
         let icon_str = if is_cli_app(name) {
@@ -56,30 +52,39 @@ pub fn find_application_icon(name: &String) -> Option<gtk::Image> {
     icon
 }
 
-fn __find_application_icon(name: &String) -> Option<gtk::Image> {
-    let mut possible_locations = vec![
-        "/usr/share/pixmaps".to_string(),
-        "/usr/share/icons/hicolor/32x32/apps/".to_string(),
-        "/usr/share/icons/hicolor/symbolic/apps".to_string(),
-        "/usr/share/icons/hicolor/scalable/apps".to_string(),
-    ];
+fn find_application_icon_inner(name: &str) -> Option<gtk::Image> {
+    if !CONF.visual.show_icons {
+        return None;
+    }
 
     let home_dir = std::env::var("HOME").unwrap().to_string();
 
-    if let Ok(paths) = fs::read_dir(home_dir + "/.icons") {
-        for path in paths {
-            let path = path.unwrap().path();
-            if path.is_dir() {
-                let path = path.to_str().unwrap().to_string();
-                possible_locations.push(path + "/32x32/apps");
-            }
-        }
-    }
+    let possible_locations = [
+        Cow::Borrowed("/usr/share/pixmaps"),
+        Cow::Borrowed("/usr/share/icons/hicolor/32x32/apps/"),
+        Cow::Borrowed("/usr/share/icons/hicolor/symbolic/apps"),
+        Cow::Borrowed("/usr/share/icons/hicolor/scalable/apps"),
+    ]
+        .into_iter()
+        .chain(fs::read_dir(home_dir + "/.icons")
+            .into_iter()
+            .flat_map(|paths| paths
+                .into_iter()
+                .flat_map(|path| {
+                    let path = path.unwrap().path();
+                    path.is_dir()
+                        .then(|| {
+                            let path = path.to_str().unwrap().to_string();
+                            Cow::Owned(path + "/32x32/apps")
+                        })
+                })
+            )
+        );
 
     const POSSIBLE_EXTENSIONS: [&str; 2] = [".png", ".svg"];
 
-    for path in possible_locations.iter() {
-        let mut path = path.clone();
+    for path in possible_locations {
+        let mut path = path.into_owned();
         path.push('/');
         path.push_str(name);
         for extension in POSSIBLE_EXTENSIONS.iter() {

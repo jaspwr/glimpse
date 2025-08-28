@@ -56,7 +56,7 @@ where
     pub fn new(db: &mut DBSession) -> Self {
         let head = SerializableDBPointer::null();
         let head = db.alloc(vec![head]);
-        let head = head.to_serializable();
+        let head = head.into_serializable();
 
         Self { head }
     }
@@ -69,7 +69,7 @@ where
             value,
         }]);
 
-        self.set_head(db, new_head.to_serializable());
+        self.set_head(db, new_head.into_serializable());
     }
 
     pub fn remove(&mut self, db: &mut DBSession, cmp: impl Fn(&T, &mut DBSession) -> bool)

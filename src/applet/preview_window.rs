@@ -15,7 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use std::{
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
 
@@ -145,26 +145,24 @@ async fn create_file_preview(path: PathBuf) -> Option<PreviewWindowContents> {
     None
 }
 
-fn dir_listing(path: &PathBuf) -> gtk::Box {
+fn dir_listing(path: &Path) -> gtk::Box {
     let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
     let dir = path.read_dir();
-    for entry in dir.unwrap() {
-        if let Ok(entry) = entry {
-            let __file_name = entry.file_name();
-            let file_name = __file_name.to_str().unwrap();
-            let (name, icon_name) = if entry.path().is_dir() {
-                (format!("/{}", file_name), "folder")
-            } else {
-                (file_name.to_string(), "folder-documents-symbolic")
-            };
+    for entry in dir.unwrap().flatten() {
+        let file_name = entry.file_name();
+        let file_name = file_name.to_str().unwrap();
+        let (name, icon_name) = if entry.path().is_dir() {
+            (format!("/{}", file_name), "folder")
+        } else {
+            (file_name.to_string(), "folder-documents-symbolic")
+        };
 
-            let grid = gtk::Grid::new();
-            let icon = gtk::Image::from_icon_name(Some(icon_name), gtk::IconSize::Button);
-            let label = gtk::Label::new(Some(&name));
-            grid.attach(&icon, 0, 0, 1, 1);
-            grid.attach(&label, 1, 0, 1, 1);
-            container.add(&grid);
-        }
+        let grid = gtk::Grid::new();
+        let icon = gtk::Image::from_icon_name(Some(icon_name), gtk::IconSize::Button);
+        let label = gtk::Label::new(Some(&name));
+        grid.attach(&icon, 0, 0, 1, 1);
+        grid.attach(&label, 1, 0, 1, 1);
+        container.add(&grid);
     }
     let scrolled_window = create_scrolled_window();
     scrolled_window.add(&container);
@@ -187,7 +185,7 @@ async fn try_from_infer(path: &PathBuf) -> Option<PreviewWindowContents> {
     None
 }
 
-fn load_image(path: &PathBuf) -> Option<gtk::Box> {
+fn load_image(path: &Path) -> Option<gtk::Box> {
     let pixbuf = gdk_pixbuf::Pixbuf::from_file_at_scale(
         path.to_str()?,
         CONF.preview_window.image_size as i32,
@@ -201,7 +199,7 @@ fn load_image(path: &PathBuf) -> Option<gtk::Box> {
     Some(container)
 }
 
-async fn create_plain_text_file_preview(path: &PathBuf) -> Option<PreviewWindowContents> {
+async fn create_plain_text_file_preview(path: &Path) -> Option<PreviewWindowContents> {
     let text = tokio::fs::read_to_string(path.to_str()?).await.ok()?;
 
     let text = trunc_long_lines(text).await;

@@ -15,7 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
-use std::sync::Mutex;
+use std::{path::Path, sync::Mutex};
 use std::{fs, io::Write, path::PathBuf};
 
 use chrono;
@@ -75,27 +75,27 @@ impl std::fmt::Display for IsLocked {
 impl std::error::Error for IsLocked {}
 
 impl FileIndex {
-    fn files_path(path: &PathBuf) -> PathBuf {
+    fn files_path(path: &Path) -> PathBuf {
         path.join("files")
     }
 
-    fn dirs_path(path: &PathBuf) -> PathBuf {
+    fn dirs_path(path: &Path) -> PathBuf {
         path.join("dirs")
     }
 
-    fn tf_idf_path(path: &PathBuf) -> PathBuf {
+    fn tf_idf_path(path: &Path) -> PathBuf {
         path.join("tf_idf")
     }
 
-    fn terms_path(path: &PathBuf) -> PathBuf {
+    fn terms_path(path: &Path) -> PathBuf {
         path.join("terms")
     }
 
-    fn lock_path(path: &PathBuf) -> PathBuf {
+    fn lock_path(path: &Path) -> PathBuf {
         path.join("lock")
     }
 
-    fn last_indexed_path(path: &PathBuf) -> PathBuf {
+    fn last_indexed_path(path: &Path) -> PathBuf {
         path.join("last_indexed")
     }
 
@@ -174,7 +174,7 @@ impl FileIndex {
         }
     }
 
-    pub fn add_dir(&mut self, path: &PathBuf) {
+    pub fn add_dir(&mut self, path: &Path) {
         if self.exceeded_capcaity() {
             return;
         }
@@ -190,12 +190,12 @@ impl FileIndex {
         }
     }
 
-    fn lock(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+    fn lock(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
         let mut lock_file = fs::File::create(Self::lock_path(path))?;
         let time = format!("{}", chrono::Utc::now().timestamp());
         lock_file.write_all(time.as_bytes())?;
 
-        HELD_LOCKS.lock().unwrap().push(path.clone());
+        HELD_LOCKS.lock().unwrap().push(path.to_owned());
 
         Ok(())
     }
@@ -226,11 +226,11 @@ impl FileIndex {
         }
     }
 
-    pub fn manual_lock(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn manual_lock(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
         Self::lock(path)
     }
 
-    pub unsafe fn manual_unlock(path: &PathBuf) {
+    pub fn manual_unlock(path: &PathBuf) {
         Self::unlock(path);
     }
 
@@ -249,13 +249,13 @@ impl FileIndex {
         }
     }
 
-    pub fn last_indexed(path: &PathBuf) -> Option<i64> {
+    pub fn last_indexed(path: &Path) -> Option<i64> {
         fs::read_to_string(Self::last_indexed_path(path))
             .ok()
             .and_then(|s| s.parse::<i64>().ok())
     }
 
-    pub fn set_last_indexed(path: &PathBuf) {
+    pub fn set_last_indexed(path: &Path) {
         let time = format!("{}", chrono::Utc::now().timestamp());
         let _ = fs::write(Self::last_indexed_path(path), time);
     }
@@ -304,7 +304,7 @@ impl Drop for FileIndex {
 
 const WORD_BUF_SIZE: usize = 100;
 
-pub fn tokenize_string(str: &String) -> Vec<String> {
+pub fn tokenize_string(str: &str) -> Vec<String> {
     let mut tokens = vec![];
 
     let mut word_buf: [char; WORD_BUF_SIZE] = ['\0'; WORD_BUF_SIZE];

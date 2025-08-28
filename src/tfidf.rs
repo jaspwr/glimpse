@@ -138,12 +138,12 @@ fn term_frequency(tokens: &Vec<String>) -> TokenFrequency {
     }
 }
 
-fn is_suitable_token(token: &String) -> bool {
+fn is_suitable_token(token: &str) -> bool {
     token.len() > 3 && token.len() < 32 && !token.chars().all(|c| c.is_numeric())
 }
 
-fn add_term(mut map: StringSearchDb, term: &String) {
-    map.insert_if_new(term, Some(term.clone()));
+fn add_term(mut map: StringSearchDb, term: &str) {
+    map.insert_if_new(term, Some(term.to_owned()));
 }
 
 fn load_as_pdf(path: &PathBuf) -> Option<String> {
@@ -181,13 +181,10 @@ fn get_doc_text(doc: Vec<DocumentChild>) -> String {
     // This crate isn't really meant to be used like this I think.
     let mut ret = String::new();
     for child in doc {
-        match child {
-            DocumentChild::Paragraph(paragraph) => {
-                for child in paragraph.children {
-                    handle_paragraph_child(child, &mut ret);
-                }
+        if let DocumentChild::Paragraph(paragraph) = child {
+            for child in paragraph.children {
+                handle_paragraph_child(child, &mut ret);
             }
-            _ => {}
         }
     }
     ret
@@ -195,22 +192,16 @@ fn get_doc_text(doc: Vec<DocumentChild>) -> String {
 
 #[inline]
 fn handle_paragraph_child(child: ParagraphChild, ret: &mut String) {
-    match child {
-        ParagraphChild::Run(run) => {
-            handle_run(run, ret);
-        }
-        _ => {}
+    if let ParagraphChild::Run(run) = child {
+        handle_run(run, ret);
     }
 }
 
 #[inline]
 fn handle_run(run: Box<Run>, ret: &mut String) {
     for child in run.children {
-        match child {
-            RunChild::Text(text) => {
-                *ret += text.text.to_string().as_str();
-            }
-            _ => {}
+        if let RunChild::Text(text) = child {
+            *ret += text.text.to_string().as_str();
         }
     }
 }
@@ -223,7 +214,7 @@ enum FileType {
 
 pub fn tokenize_file(path: &PathBuf) -> Option<Vec<String>> {
     let mut file_type = match infer::get_from_path(path).ok()? {
-        Some(type_) => match type_.mime_type() {
+        Some(ty) => match ty.mime_type() {
             "application/pdf" => FileType::Pdf,
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             | "application/word" => FileType::Docx,
