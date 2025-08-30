@@ -30,7 +30,7 @@ impl DBString {
     pub fn new(db: &mut DBSession, str: String) -> Self {
         let chars = str.bytes().collect::<Vec<u8>>();
         let chunk = db.alloc(chars);
-        Self(chunk.to_serializable())
+        Self(chunk.into_serializable())
     }
 
     pub fn load_string(&self, db: &mut DBSession) -> String {

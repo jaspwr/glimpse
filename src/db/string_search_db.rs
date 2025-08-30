@@ -61,7 +61,7 @@ impl StringSearchDb {
             .insert(&mut db, word.as_str(), &points_to.unwrap());
     }
 
-    pub fn get(&mut self, word: &str, id_hash: &Box<dyn Fn(&str) -> u64>) -> Vec<(String, f32)> {
+    pub fn get(&mut self, word: &str, id_hash: &dyn Fn(&str) -> u64) -> Vec<(String, f32)> {
         if word.len() < 3 {
             return vec![];
         }
@@ -74,17 +74,17 @@ impl StringSearchDb {
             self.trie
                 .fuzzy_get(&mut db, word)
                 .into_iter()
-                .map(|s| (s.clone(), word_similarity(&word.to_string(), s, id_hash))),
+                .map(|s| (s.clone(), word_similarity(word, s, id_hash))),
         );
 
         results
     }
 
-    pub fn insert_if_new(&mut self, word: &String, points_to: Option<String>) {
+    pub fn insert_if_new(&mut self, word: &str, points_to: Option<String>) {
         let mut db = self.db.lock().unwrap();
         if self.trie.get(&mut db, word).is_empty() {
             self.trie
-                .insert(&mut db, word.as_str(), &points_to.unwrap());
+                .insert(&mut db, word, &points_to.unwrap());
         }
     }
 

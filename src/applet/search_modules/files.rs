@@ -204,7 +204,7 @@ impl Files {
 
             let icon_name = match kind {
                 FileType::File => {
-                    let ext = name.split('.').last().unwrap_or("");
+                    let ext = name.split('.').next_back().unwrap_or("");
                     find_file_icon_name(ext)
                 }
                 FileType::Dir => find_folder_icon_name(&name),

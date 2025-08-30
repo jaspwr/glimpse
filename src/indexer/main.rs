@@ -95,9 +95,7 @@ fn reindex() {
         fs::copy(file.path(), dest).unwrap();
     }
 
-    unsafe {
-        FileIndex::manual_unlock(&db_path);
-    }
+    FileIndex::manual_unlock(&db_path);
 
     fs::remove_dir_all(temp_db_path).unwrap();
 }

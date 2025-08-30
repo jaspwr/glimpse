@@ -39,10 +39,10 @@ pub fn write_clipboard(s: &str) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-pub fn xdg_open(name: &String) -> Result<(), std::io::Error> {
+pub fn xdg_open(name: &str) -> Result<(), std::io::Error> {
     let mut command = Command::new("bash");
     command.arg("-c");
-    command.arg(format!("xdg-open \"{}\" & disown", name.clone()));
+    command.arg(format!("xdg-open \"{}\" & disown", name));
     command.execute()?;
     Ok(())
 }

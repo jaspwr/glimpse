@@ -29,10 +29,9 @@ pub static CONF: Lazy<Config> = Lazy::new(|| match load_config() {
         config.error = None;
         config
     }
-    Err(err) => {
-        let mut ret = Config::default();
-        ret.error = Some(err.to_string());
-        ret
+    Err(err) => Config {
+        error: Some(err.to_string()),
+        ..Config::default()
     }
 });
 

@@ -17,7 +17,7 @@
 use std::{
     fs::{self, OpenOptions},
     io::{self, Seek, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use memmap::{Mmap, MmapMut};
@@ -108,20 +108,21 @@ impl Drop for DBSession {
     }
 }
 
-pub fn meta_path(path: &PathBuf) -> PathBuf {
-    let mut path = path.clone();
+pub fn meta_path(path: &Path) -> PathBuf {
+    let mut path = path.to_owned();
     path.set_extension("dbmeta1");
     path
 }
 
-fn create_file_if_inexistent(path: &PathBuf) -> bool {
+fn create_file_if_inexistent(path: &Path) -> bool {
     if !path.exists() {
         let cap = 1024 * 1024 * 2; // 2 MiB
 
         let mut file = OpenOptions::new()
             .write(true)
             .create(true)
-            .open(path.clone())
+            .truncate(true)
+            .open(path)
             .unwrap();
 
         file.set_len(cap as u64).unwrap();
@@ -147,9 +148,9 @@ pub struct Meta {
 const META_VERSION: u32 = 0;
 
 impl Meta {
-    pub fn new(path: &PathBuf) -> Self {
+    pub fn new(path: &Path) -> Self {
         Self {
-            path: path.clone(),
+            path: path.to_path_buf(),
             // chunk_descriptors: vec![],
             max_allocated: Address(0),
             pointer_store: vec![],
@@ -162,8 +163,8 @@ impl Meta {
     //         .find(|chunk| chunk.start == address)
     // }
 
-    pub fn load(path: &PathBuf) -> Self {
-        let mut file = fs::File::open(path.clone()).unwrap();
+    pub fn load(path: &Path) -> Self {
+        let mut file = fs::File::open(path).unwrap();
         savefile::load(&mut file, META_VERSION).unwrap()
     }
 
@@ -173,9 +174,9 @@ impl Meta {
     }
 }
 
-pub fn remove_if_exists(path: &PathBuf) {
-    if path.clone().try_exists().unwrap() {
-        fs::remove_file(path.clone()).unwrap();
+pub fn remove_if_exists(path: &Path) {
+    if path.try_exists().unwrap() {
+        fs::remove_file(path).unwrap();
     }
 }
 

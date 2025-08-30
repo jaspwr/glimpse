@@ -15,11 +15,9 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use std::{
-    path::PathBuf,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
-    },
+    path::PathBuf, rc::Rc, sync::{
+        Arc, Mutex, atomic::{AtomicBool, Ordering}
+    }
 };
 
 use futures::{future::abortable, stream::AbortHandle};
@@ -122,8 +120,6 @@ pub fn run_app() {
 
         container.add(&scrolled_window);
 
-        let boxed_scrolled_window = Arc::new(scrolled_window);
-
         if CONF.visual.result_borders {
             if CONF.visual.dark_result_borders {
                 let style_provider = gtk::CssProvider::new();
@@ -220,7 +216,7 @@ pub fn run_app() {
                 (*current_task_handle).clear()
             }
 
-            set_visibility(visible, boxed_scrolled_window.clone(), preview_window, rt.clone());
+            set_visibility(visible, &scrolled_window, preview_window, rt.clone());
 
             {
                 let list = list_cpy.lock().unwrap();
@@ -264,7 +260,7 @@ pub fn run_app() {
                 perform_entry_action(row);
             });
 
-        let search_field = Arc::new(search_field);
+        let search_field = Rc::new(search_field);
         search_field.style_context().add_class("search-field");
 
         let search_field_cpy = search_field.clone();
@@ -276,7 +272,7 @@ pub fn run_app() {
                 let key = key_event.keyval();
                 let search_field = search_field_cpy.clone();
 
-                handle_list_keypress(key, search_field, list);
+                handle_list_keypress(key, &search_field, list);
 
                 pango::glib::Propagation::Proceed
             });
@@ -419,16 +415,16 @@ fn start_preview_window_task(
 
 fn set_visibility(
     visible: bool,
-    boxed_scrolled_window: Arc<gtk::ScrolledWindow>,
+    boxed_scrolled_window: &gtk::ScrolledWindow,
     preview_window: PrevWindow,
     rt: BoxedRuntime,
 ) {
     let mut preview_window = rt.lock().unwrap().block_on(preview_window.lock());
     if visible {
         preview_window.hide();
-        boxed_scrolled_window.clone().hide();
+        boxed_scrolled_window.hide();
     } else {
-        boxed_scrolled_window.clone().show_all();
+        boxed_scrolled_window.show_all();
     }
 }
 
@@ -441,7 +437,7 @@ fn add_style_provider(style_provider: gtk::CssProvider) {
     );
 }
 
-fn create_err_msg(error_title: String, err_msg: &String, container: &gtk::Box) {
+fn create_err_msg(error_title: String, err_msg: &str, container: &gtk::Box) {
     let error_title = gtk::Label::new(Some(error_title.as_str()));
 
     error_title.set_halign(gtk::Align::Start);
@@ -600,7 +596,7 @@ fn global_keypress_handler(key: gdk::keys::Key) {
     }
 }
 
-fn handle_list_keypress(key: gdk::keys::Key, search_field: Arc<gtk::Entry>, list: &gtk::ListBox) {
+fn handle_list_keypress(key: gdk::keys::Key, search_field: &gtk::Entry, list: &gtk::ListBox) {
     if key == gdk::keys::constants::Control_L || key == gdk::keys::constants::Control_R {
         CONTROL.store(true, Ordering::Relaxed);
     }

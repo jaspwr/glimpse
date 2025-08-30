@@ -19,7 +19,7 @@ use glimpse::string_similarity::word_similarity;
 use crate::utils::HashFn;
 
 pub fn string_search(
-    needle: &String,
+    needle: &str,
     haystack: &Vec<String>,
     max_results: u32,
     id_hash: &HashFn,
@@ -31,7 +31,7 @@ pub fn string_search(
         return results;
     }
 
-    let mut needle = needle.clone();
+    let mut needle = needle.to_string();
     if !case_sensitive {
         needle = needle.to_lowercase();
     }

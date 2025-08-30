@@ -16,7 +16,7 @@
 
 use crate::biases::BIASES;
 
-pub fn word_similarity(needle: &String, item: String, id_hash: &Box<dyn Fn(&str) -> u64>) -> f32 {
+pub fn word_similarity(needle: &str, item: String, id_hash: &dyn Fn(&str) -> u64) -> f32 {
     let needle = needle.to_lowercase();
     let item = item.to_lowercase();
 
@@ -47,7 +47,7 @@ pub fn word_similarity(needle: &String, item: String, id_hash: &Box<dyn Fn(&str)
     similarity
 }
 
-fn matched_chars_loose(checking: &String, against: &String) -> u32 {
+fn matched_chars_loose(checking: &str, against: &str) -> u32 {
     let mut ret: u32 = 0;
     let mut against_char = against.chars();
     loop {

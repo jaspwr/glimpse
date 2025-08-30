@@ -91,7 +91,7 @@ where
             .collect::<Vec<_>>();
 
         let buckets = db.alloc(buckets);
-        let buckets = buckets.to_serializable();
+        let buckets = buckets.into_serializable();
 
         let map = __DBHashMap::<KInDb, V> {
             buckets,
@@ -101,7 +101,7 @@ where
         };
 
         let inner = db.alloc(vec![map]);
-        let inner = inner.to_serializable();
+        let inner = inner.into_serializable();
 
         DBHashMap::<KInDb, V> { inner }
     }
@@ -190,8 +190,7 @@ where
             .map(|bucket_index| buckets[bucket_index].clone())
             .collect();
 
-        for bucket_index in 0..bucket_count {
-            let bucket = buckets[bucket_index].clone();
+        for bucket in buckets.iter().take(bucket_count) {
             let bucket_items = bucket.iter(db).collect::<Vec<_>>();
             items.extend(bucket_items.into_iter().map(|kvp| kvp.into()));
         }
@@ -199,7 +198,7 @@ where
         items
     }
 
-    pub fn into_iter(&self, db: &mut DBSession) -> <Vec<(KInDb, V)> as IntoIterator>::IntoIter {
+    pub fn iter(&self, db: &mut DBSession) -> <Vec<(KInDb, V)> as IntoIterator>::IntoIter {
         self.flatten(db).into_iter()
     }
 }
@@ -273,7 +272,6 @@ where
 }
 
 #[cfg(test)]
-
 mod tests {
     use std::{fs, path::PathBuf};
 
